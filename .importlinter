@@ -1,0 +1,42 @@
+# import-linter configuration for z4j-core
+#
+# Enforces the "core knows nothing" principle: z4j_core may import
+# only Pydantic, typing_extensions, and the standard library. Any
+# framework, engine, transport, or ORM import fails the build.
+#
+# Run with: uv run lint-imports
+
+[importlinter]
+root_packages =
+    z4j_core
+include_external_packages = True
+
+[importlinter:contract:core-purity]
+name = z4j_core must not import framework or engine code
+type = forbidden
+source_modules =
+    z4j_core
+forbidden_modules =
+    django
+    flask
+    fastapi
+    starlette
+    celery
+    kombu
+    rq
+    dramatiq
+    huey
+    arq
+    taskiq
+    redis
+    amqp
+    pika
+    sqlalchemy
+    alembic
+    asyncpg
+    psycopg
+    psycopg2
+    httpx
+    requests
+    aiohttp
+    websockets
