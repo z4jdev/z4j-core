@@ -30,6 +30,13 @@ class Config(Z4JModel):
         token: Project-scoped bearer token, kept as a ``SecretStr`` so
                it never ends up in logs or tracebacks.
         project_id: Project slug the token is scoped to.
+        agent_name: Optional human-readable label for THIS agent
+                    instance. Surfaces in the dashboard's agent list
+                    and in the ``host.name`` field of the hello frame.
+                    The agent's authoritative name is the one set when
+                    the token was minted; this overrides it for display
+                    purposes (useful when one token is shared across
+                    multiple workers and you want per-host labels).
         environment: Free-form environment label attached to every event.
         tags: Per-deployment tags echoed on every event.
         transport: ``"auto"``, ``"ws"``, or ``"longpoll"``.
@@ -61,6 +68,7 @@ class Config(Z4JModel):
     brain_url: AnyHttpUrl
     token: SecretStr
     project_id: str = Field(min_length=1, max_length=63)
+    agent_name: str | None = Field(default=None, max_length=64)
     #: Optional. Required ONLY when ``transport == "longpoll"``: the
     #: long-poll path has no handshake frame, so the agent has to
     #: advertise its own UUID up-front. WebSocket sessions discover
