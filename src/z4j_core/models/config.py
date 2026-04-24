@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, Field, SecretStr
+from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
 
 from z4j_core.models._base import Z4JModel
 
@@ -119,6 +119,34 @@ class Config(Z4JModel):
     redaction_extra_key_patterns: list[str] = Field(default_factory=list)
     redaction_extra_value_patterns: list[str] = Field(default_factory=list)
     redaction_defaults_enabled: bool = True
+
+    @model_validator(mode="after")
+    def _require_agent_id_for_longpoll(self) -> "Config":
+        """Long-poll has no handshake frame, so the agent MUST know
+        its own UUID up-front. Audit 2026-04-24 Medium-2: without this
+        check the transport silently coerces an empty / malformed
+        value to a random ``uuid4()`` inside
+        :func:`z4j_bare.transport.longpoll._safe_uuid`, the FrameSigner
+        binds to that random UUID, and every brain<->agent frame
+        fails HMAC verification against the real agent row. Fail
+        fast at config-construction time instead.
+        """
+        if self.transport == "longpoll":
+            if not self.agent_id:
+                raise ValueError(
+                    "transport='longpoll' requires agent_id (pass "
+                    "Z4J_AGENT_ID or the agent_id kwarg); the "
+                    "long-poll transport has no handshake frame to "
+                    "discover it.",
+                )
+            try:
+                UUID(self.agent_id)
+            except (ValueError, AttributeError) as exc:
+                raise ValueError(
+                    f"transport='longpoll' requires agent_id to be a "
+                    f"valid UUID, got {self.agent_id!r}: {exc}",
+                ) from None
+        return self
 
 
 class DiscoveryHints(Z4JModel):
