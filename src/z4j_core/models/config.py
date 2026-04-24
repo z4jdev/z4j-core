@@ -8,6 +8,7 @@ framework adapter exposes to the agent core.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -15,6 +16,32 @@ from uuid import UUID
 from pydantic import AnyHttpUrl, Field, SecretStr
 
 from z4j_core.models._base import Z4JModel
+
+
+def _default_buffer_path() -> Path:
+    """Default per-process SQLite buffer path.
+
+    Includes the OS process id so two agent runtimes inside the same
+    Python interpreter user (web process + Celery worker, e.g.) do
+    not collide on the same SQLite file.
+
+    Why per-process matters: each agent runtime keeps in-memory
+    cached counters (entry count, bytes total) that are incremented
+    on append and decremented on confirm. SQLite WAL lets multiple
+    processes write to one file concurrently, but each process's
+    cache only sees its own deltas - process A confirms 30 rows it
+    never appended (drained from process B) and its cache underflows.
+    The drift was self-healed by a re-read on every heartbeat, but
+    the WARNING log line was noisy and the underlying bug was real.
+    Per-process paths make it impossible.
+
+    PID is captured at instance time, not at module import, so a
+    re-instantiated Config in the same process gets the same PID.
+    Empty buffer files get cleaned up on process shutdown by
+    BufferStore.close() (z4j-bare 1.0.4+) so we don't accumulate
+    buffer-{stale-pid}.sqlite files over many restarts.
+    """
+    return Path.home() / ".z4j" / f"buffer-{os.getpid()}.sqlite"
 
 
 class Config(Z4JModel):
@@ -81,7 +108,7 @@ class Config(Z4JModel):
     engines: list[str] = Field(default_factory=list)
     schedulers: list[str] = Field(default_factory=list)
     heartbeat_seconds: int = Field(default=10, ge=1, le=300)
-    buffer_path: Path = Field(default=Path.home() / ".z4j" / "buffer.sqlite")
+    buffer_path: Path = Field(default_factory=_default_buffer_path)
     buffer_max_events: int = Field(default=100_000, ge=1000)
     buffer_max_bytes: int = Field(default=256 * 1024 * 1024, ge=1024 * 1024)
     max_payload_bytes: int = Field(default=8192, ge=128)

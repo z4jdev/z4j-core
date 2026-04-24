@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-04-24
+
+### Changed
+
+- **`Config.buffer_path` default is now per-process.** Was `~/.z4j/buffer.sqlite` (one shared file across every agent runtime in the same user). Now `~/.z4j/buffer-{pid}.sqlite` (one file per Python process). Fixes a real drift bug where two agent runtimes (e.g. Django web + Celery worker) sharing one file kept their own in-memory cached counters that drifted out of sync, producing the `cached counters drifted negative` WARNING in the worker log. SQLite WAL handled the concurrent writes correctly; only the per-process count cache was wrong. Per-process paths make the bug structurally impossible.
+- The PID is captured at `Config()` instantiation time (via `Field(default_factory=...)`), not at module import. Multiple `Config()` calls in the same process resolve to the same path.
+
+### Migration notes
+
+If you have an existing `~/.z4j/buffer.sqlite` with un-drained events from a pre-1.0.3 install, those events stay where they are - the new default points at a different file. To recover the legacy buffer, either set `Z4J_BUFFER_PATH=~/.z4j/buffer.sqlite` for ONE process and let it drain, OR delete `~/.z4j/buffer.sqlite` if you don't care about the queued events (in practice the buffer empties within seconds whenever the brain is reachable; long-queued events are unusual).
+
 ## [1.0.1] - 2026-04-21
 
 ### Changed
