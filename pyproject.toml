@@ -1,6 +1,6 @@
 [project]
 name = "z4j-core"
-version = "1.0.3"
+version = "1.0.4"
 description = "z4j domain core - models, protocols, transport, redaction, policy (Apache 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"

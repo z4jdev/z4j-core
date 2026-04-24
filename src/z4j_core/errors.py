@@ -212,11 +212,29 @@ class RedactionConfigError(ConfigError):
     code = "redaction_config_error"
 
 
+class BufferStorageError(ConfigError):
+    """The on-disk SQLite buffer directory is not usable.
+
+    Raised when the agent cannot create or write to the resolved
+    buffer path AND every fallback location was also unwritable.
+    The exception ``message`` should name the offending path, the
+    process uid, and point operators at ``Z4J_BUFFER_PATH`` as the
+    canonical override.
+
+    The runtime catches this at startup and refuses to start rather
+    than silently buffer events into memory and lose them on the next
+    restart - data integrity over uptime.
+    """
+
+    code = "buffer_storage_error"
+
+
 __all__ = [
     "AdapterError",
     "AgentOfflineError",
     "AuthenticationError",
     "AuthorizationError",
+    "BufferStorageError",
     "CommandTimeoutError",
     "ConfigError",
     "ConflictError",

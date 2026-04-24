@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-04-24
+
+### Added
+
+- **`BufferStorageError` exception** in `z4j_core.errors` (subclass of `ConfigError`). Raised by the agent when the on-disk SQLite buffer directory is unwritable AND every fallback location was also unusable. Operators see a clean diagnostic line with the offending path, the running uid, and the canonical `Z4J_BUFFER_PATH` override - instead of a raw `PermissionError` traceback buried in worker logs. Required for the buffer-path fallback in z4j-bare 1.0.6.
+
 ## [1.0.3] - 2026-04-24
 
 ### Changed
