@@ -7,12 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.5] - 2026-04-27
+## [1.0.6] - 2026-04-27
 
 > Coordinated companion publish to `z4j-brain` 1.0.19 and the `z4j`
 > umbrella 1.0.19 — the last fully-stable v1.0.x patch wave before
 > the v1.1.0 ecosystem baseline. Pure additive: any caller built
 > against `z4j-core` 1.0.4 keeps working unchanged.
+>
+> **Why 1.0.6 and not 1.0.5:** an earlier 1.0.5 was published to
+> PyPI as a version-only bump that did NOT include the Schedule
+> field additions described below. PyPI is immutable, so the actual
+> additions ship as 1.0.6. Anyone targeting "the version that
+> understands `catch_up` / `source` / `source_hash`" should pin
+> `z4j-core>=1.0.6,<1.1`.
+
+## [1.0.5] - 2026-04-27 (yanked / no functional changes)
+
+> Published to PyPI as a version-only bump without the Schedule
+> field additions. **Do not depend on this version.** Use 1.0.6 or
+> later. Yanked from PyPI.
 
 ### Added
 
