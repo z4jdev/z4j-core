@@ -48,7 +48,9 @@ class FrameSigner:
     :class:`FrameSigner`.
     """
 
-    __slots__ = ("_secret", "_agent_id", "_project_id", "_next_seq")
+    __slots__ = (
+        "_secret", "_agent_id", "_project_id", "_session_id", "_next_seq",
+    )
 
     def __init__(
         self,
@@ -56,6 +58,7 @@ class FrameSigner:
         secret: bytes,
         agent_id: str | UUID,
         project_id: str | UUID,
+        session_id: str | UUID | None = None,
         initial_seq: int = 1,
     ) -> None:
         if len(secret) < 32:
@@ -63,6 +66,23 @@ class FrameSigner:
         self._secret = secret
         self._agent_id = str(agent_id)
         self._project_id = str(project_id)
+        # Round-9 audit fix R9-Wire-H1+H2 (Apr 2026): bind the
+        # session_id into the signed envelope. Pre-fix the seq
+        # counter and nonce window were instance-scoped — they
+        # reset to 0 on every reconnect — so an attacker who
+        # captured a frame from session N could replay it inside
+        # session N+1 (seq > 0, ts within the 60s skew window,
+        # nonce never seen by the new instance). Binding session_id
+        # makes the captured frame's HMAC fail against the new
+        # session's verifier, since the verifier reconstitutes the
+        # envelope with the NEW session_id and the bytes signed
+        # under the OLD one no longer match.
+        #
+        # Optional for backwards compat with existing tests +
+        # legacy callers that haven't been updated. Production
+        # call sites in gateway.py / websocket.py supply it from
+        # the HelloAck payload.
+        self._session_id = str(session_id) if session_id is not None else ""
         self._next_seq = int(initial_seq)
 
     def sign_and_serialize(self, frame: _SignedFrameBase) -> bytes:
@@ -83,6 +103,10 @@ class FrameSigner:
         envelope = frame.model_dump(mode="json")
         envelope["agent_id"] = self._agent_id
         envelope["project_id"] = self._project_id
+        # R9-Wire-H1+H2: also bind session_id so cross-session
+        # replays fail at HMAC verify, not just at the per-instance
+        # nonce window.
+        envelope["session_id"] = self._session_id
         frame.hmac = sign_envelope(self._secret, envelope)
         return serialize_frame(frame)
 
@@ -101,7 +125,9 @@ class FrameVerifier:
     increment a security counter on any exception.
     """
 
-    __slots__ = ("_secret", "_agent_id", "_project_id", "_guard")
+    __slots__ = (
+        "_secret", "_agent_id", "_project_id", "_session_id", "_guard",
+    )
 
     def __init__(
         self,
@@ -109,6 +135,7 @@ class FrameVerifier:
         secret: bytes,
         agent_id: str | UUID,
         project_id: str | UUID,
+        session_id: str | UUID | None = None,
         direction: str = "inbound",
     ) -> None:
         if len(secret) < 32:
@@ -116,6 +143,10 @@ class FrameVerifier:
         self._secret = secret
         self._agent_id = str(agent_id)
         self._project_id = str(project_id)
+        # Round-9 audit fix R9-Wire-H1+H2 (Apr 2026): see
+        # FrameSigner above. Binds the verifier to one session so a
+        # captured frame from a previous session fails HMAC.
+        self._session_id = str(session_id) if session_id is not None else ""
         self._guard = ReplayGuard(direction=direction)
 
     def parse_and_verify(self, data: bytes | str) -> Frame:
@@ -126,6 +157,10 @@ class FrameVerifier:
         is still being established. Every other frame MUST be an
         :class:`_SignedFrameBase` subclass with a valid envelope.
         """
+        from z4j_core.transport.frames import (  # noqa: PLC0415
+            HelloAckFrame, HelloFrame,
+        )
+
         frame = parse_frame(data)
         if frame.v != PROTOCOL_VERSION:
             raise ProtocolError(
@@ -133,16 +168,32 @@ class FrameVerifier:
                 f"expected {PROTOCOL_VERSION}",
             )
 
-        # Handshake frames do not carry HMAC - they establish the
-        # session binding. The caller (gateway / agent-transport)
-        # authenticates them via bearer token.
-        if not isinstance(frame, _SignedFrameBase):
+        # Round-9 audit fix R9-Wire-MED (Apr 2026): explicit
+        # ALLOW-LIST for unsigned frames rather than negative
+        # ``not isinstance(_SignedFrameBase)``. Future frame types
+        # added to the union must be either a subclass of
+        # ``_SignedFrameBase`` (signed) OR explicitly listed here
+        # (unsigned handshake) — anything else is rejected with a
+        # ProtocolError. Closes the silent-bypass risk where a new
+        # frame class accidentally inherits from neither
+        # ``_SignedFrameBase`` nor the handshake set.
+        _UNSIGNED_FRAME_TYPES = (HelloFrame, HelloAckFrame)
+        if isinstance(frame, _UNSIGNED_FRAME_TYPES):
             return frame
+        if not isinstance(frame, _SignedFrameBase):
+            raise ProtocolError(
+                f"frame type {type(frame).__name__} is neither a "
+                "signed frame nor a known handshake frame; refusing "
+                "to bypass HMAC verification",
+            )
 
         # Reconstitute the envelope the sender signed over.
         envelope = frame.model_dump(mode="json")
         envelope["agent_id"] = self._agent_id
         envelope["project_id"] = self._project_id
+        # R9-Wire-H1+H2: include session_id so a frame signed
+        # under a different session's binding fails verification.
+        envelope["session_id"] = self._session_id
 
         # Order matters: check HMAC FIRST so an attacker who hasn't
         # broken the signature cannot probe our replay state.

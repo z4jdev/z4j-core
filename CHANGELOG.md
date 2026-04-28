@@ -7,40 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.6] - 2026-04-27
+## [1.1.0] - 2026-04-28
 
-> Coordinated companion publish to `z4j-brain` 1.0.19 and the `z4j`
-> umbrella 1.0.19 — the last fully-stable v1.0.x patch wave before
-> the v1.1.0 ecosystem baseline. Pure additive: any caller built
-> against `z4j-core` 1.0.4 keeps working unchanged.
->
-> **Why 1.0.6 and not 1.0.5:** an earlier 1.0.5 was published to
-> PyPI as a version-only bump that did NOT include the Schedule
-> field additions described below. PyPI is immutable, so the actual
-> additions ship as 1.0.6. Anyone targeting "the version that
-> understands `catch_up` / `source` / `source_hash`" should pin
-> `z4j-core>=1.0.6,<1.1`.
+> Coordinated ecosystem release alongside `z4j-brain` 1.1.0,
+> `z4j-scheduler` 1.1.0, and the `z4j` umbrella 1.1.0. v1.1.x is the
+> ecosystem's always-works baseline - see `docs/MIGRATIONS.md` in the
+> z4j repo for the additive-only compatibility contract.
 
-## [1.0.5] - 2026-04-27 (yanked / no functional changes)
+### Security (round-9 audit, wire protocol)
 
-> Published to PyPI as a version-only bump without the Schedule
-> field additions. **Do not depend on this version.** Use 1.0.6 or
-> later. Yanked from PyPI.
+- **Cross-session replay attack closed.** Pre-fix the wire
+  protocol's HMAC envelope did not include the connection's
+  `session_id`. Combined with the agent's per-session reset of
+  `seq + nonce` counters, this meant an attacker who recorded a
+  signed envelope from session A could replay it into session B
+  (both sessions had independent counter spaces starting at the
+  same low values, so the replay-guard's `seq` check passed).
+  Fix in `transport/framing.py`: signer and verifier now bind the
+  `session_id` into the signed payload. Verifier rejects the
+  frame if the embedded session_id doesn't match the connection
+  context. Wired in both the WebSocket and long-poll codepaths
+  (brain side + agent side both get the protection).
+- **`canonical_json` now refuses `NaN`/`Infinity`.** Pre-fix
+  `json.dumps(allow_nan=True)` would accept these values on the
+  signer side, but Python's `json.loads` accepts them
+  asymmetrically - and `int`/`float` round-tripping produced
+  divergent canonical forms across versions. The asymmetric
+  acceptance was a working footgun for verification mismatches.
+  Now `allow_nan=False` everywhere; non-finite floats raise at
+  the signer boundary so the operator sees a clear error.
 
 ### Added
 
 - **`Schedule` model gains `catch_up`, `source`, `source_hash`** to
-  match the brain's SQLAlchemy schema and REST `SchedulePublic`
-  payload. Without these, an external SDK consumer calling
-  `GET /api/v1/projects/{slug}/schedules` against a brain that
-  populates the new columns would have failed Pydantic validation
-  (the `Schedule` model uses `extra="forbid"` so unknown fields
-  raise). All three fields ship with defaults
-  (`CatchUpPolicy.SKIP`, `"dashboard"`, `None`) so callers building
-  a `Schedule` from scratch don't need to pass them.
+  match the brain's SQLAlchemy schema. Without these, every external
+  SDK consumer that called `GET /api/schedules` against a brain on
+  the new schema would have failed Pydantic validation on a perfectly
+  normal response (the model uses `extra="forbid"`). All three fields
+  ship with defaults (`CatchUpPolicy.SKIP`, `"dashboard"`, `None`) so
+  callers building a `Schedule` from scratch don't need to pass them.
 - **`CatchUpPolicy` StrEnum** (`skip` / `fire_one_missed` /
-  `fire_all_missed`) for type-safe access to the new field.
-  Exported from `z4j_core.models`. Pinned by
+  `fire_all_missed`) for type-safe access to the new field. Exported
+  from `z4j_core.models`. Pinned by
   `tests/unit/test_models.py::TestSchedule`.
 
 ## [1.0.4] - 2026-04-24

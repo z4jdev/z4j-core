@@ -76,7 +76,12 @@ class _SignedFrameBase(_FrameBase):
     then rejects any incoming frame whose envelope doesn't match.
     """
 
-    nonce: str = Field(default="", max_length=64)
+    # Round-9 audit fix R9-Wire-LOW (Apr 2026): tighten nonce cap.
+    # ``make_nonce()`` returns ``secrets.token_urlsafe(16)`` = 22
+    # chars; the prior 64-cap let a peer ship 64-byte nonces and
+    # bloat the OrderedDict's per-entry size 3×. 32 covers any
+    # reasonable encoding of 16 random bytes.
+    nonce: str = Field(default="", max_length=32)
     seq: int = Field(default=0, ge=0)
     hmac: str = Field(default="", max_length=128)
 
@@ -101,11 +106,18 @@ class HelloFrame(_FrameBase):
 class HelloPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    protocol_version: str
-    agent_version: str
-    framework: str
-    engines: list[str] = Field(default_factory=list)
-    schedulers: list[str] = Field(default_factory=list)
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): cap list/dict
+    # cardinality on every wire-frame payload. Pre-fix a single
+    # signed handshake could carry a 10M-element ``engines`` list
+    # or ``capabilities`` dict, OOM-walking the validator before
+    # the WS gateway's frame-bytes cap kicked in. The values below
+    # are 100x any realistic agent (a fleet shipping 5 engines and
+    # 3 schedulers with ~10 capabilities each).
+    protocol_version: str = Field(max_length=40)
+    agent_version: str = Field(max_length=40)
+    framework: str = Field(max_length=40)
+    engines: list[str] = Field(default_factory=list, max_length=64)
+    schedulers: list[str] = Field(default_factory=list, max_length=64)
     capabilities: dict[str, list[str]] = Field(default_factory=dict)
     host: dict[str, Any] = Field(default_factory=dict)
 
@@ -125,13 +137,17 @@ class HelloAckFrame(_FrameBase):
 class HelloAckPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    protocol_version: str
-    brain_version: str
-    agent_id: str
-    project_id: str
-    session_id: str
-    heartbeat_interval_seconds: int = 10
-    max_frame_size_bytes: int = 1_048_576
+    # Round-9 audit fix R9-Wire-LOW (Apr 2026): mirror the caps
+    # already on HelloPayload so a hostile/buggy peer can't ship a
+    # 100MB string in any handshake field. Pre-handshake DoS
+    # surface — Pydantic walks each string before HMAC check.
+    protocol_version: str = Field(max_length=40)
+    brain_version: str = Field(max_length=40)
+    agent_id: str = Field(max_length=64)
+    project_id: str = Field(max_length=64)
+    session_id: str = Field(max_length=64)
+    heartbeat_interval_seconds: int = Field(default=10, ge=1, le=3600)
+    max_frame_size_bytes: int = Field(default=1_048_576, ge=1024, le=64 * 1024 * 1024)
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +170,16 @@ class EventBatchFrame(_SignedFrameBase):
 class EventBatchPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    events: list[dict[str, Any]] = Field(default_factory=list)
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): hard cap on the
+    # ``events`` list. The WS gateway's bytes cap and the
+    # frame-router's iteration cap (R7) are both downstream of
+    # Pydantic parse time — without this, the validator walks an
+    # unbounded list before either kicks in. 5000 is generous
+    # (500 is the agent's batcher ceiling) and far below the
+    # pre-existing 1 MiB frame-bytes cap.
+    events: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=5000,
+    )
 
 
 class EventBatchAckFrame(_SignedFrameBase):
@@ -191,9 +216,13 @@ class HeartbeatFrame(_SignedFrameBase):
 class HeartbeatPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    buffer_size: int = Field(default=0, ge=0)
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): bounded counters and
+    # adapter_health. ``ge=0`` is already enforced; we add a sanity
+    # ``le`` cap on ints so a hostile heartbeat can't poison
+    # downstream metric exporters with int64-max values.
+    buffer_size: int = Field(default=0, ge=0, le=10_000_000)
     last_flush_at: datetime | None = None
-    dropped_events: int = Field(default=0, ge=0)
+    dropped_events: int = Field(default=0, ge=0, le=10_000_000)
     adapter_health: dict[str, str] = Field(default_factory=dict)
 
 
@@ -219,11 +248,16 @@ class CommandFrame(_SignedFrameBase):
 class CommandPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    action: str
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): bound the command
+    # envelope. ``action`` is a known short token; ``issued_by``
+    # is a UUID string; ``target`` and ``parameters`` are still
+    # ``dict`` (per-command shape varies) but the WS gateway's
+    # frame-bytes cap remains the outer bound.
+    action: str = Field(max_length=80)
     target: dict[str, Any] = Field(default_factory=dict)
     parameters: dict[str, Any] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=60, ge=1, le=3600)
-    issued_by: str | None = None
+    issued_by: str | None = Field(default=None, max_length=64)
 
 
 class CommandAckFrame(_SignedFrameBase):
@@ -253,7 +287,10 @@ class CommandResultPayload(BaseModel):
 
     status: Literal["success", "failed"]
     result: dict[str, Any] | None = None
-    error: str | None = None
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): ``error`` is rendered
+    # in the audit log + dashboard; cap to keep a hostile or buggy
+    # adapter from inflating either by emitting a 100MB traceback.
+    error: str | None = Field(default=None, max_length=8192)
 
 
 # ---------------------------------------------------------------------------
@@ -271,10 +308,14 @@ class RegistryDeltaFrame(_SignedFrameBase):
 class RegistryDeltaPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    engine: str
-    added: list[dict[str, Any]] = Field(default_factory=list)
-    removed: list[str] = Field(default_factory=list)
-    updated: list[dict[str, Any]] = Field(default_factory=list)
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): cap registry-delta
+    # cardinality. A typical adapter ships 10-200 task definitions;
+    # 10000 covers monorepo-scale projects with substantial headroom
+    # while bounding the validator walk.
+    engine: str = Field(max_length=40)
+    added: list[dict[str, Any]] = Field(default_factory=list, max_length=10_000)
+    removed: list[str] = Field(default_factory=list, max_length=10_000)
+    updated: list[dict[str, Any]] = Field(default_factory=list, max_length=10_000)
 
 
 # ---------------------------------------------------------------------------
@@ -292,8 +333,9 @@ class ErrorFrame(_SignedFrameBase):
 class ErrorPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    code: str
-    message: str
+    # Round-8 audit fix R8-Pyd-H1 (Apr 2026).
+    code: str = Field(max_length=80)
+    message: str = Field(max_length=8192)
     fatal: bool = False
 
 
@@ -396,11 +438,25 @@ def canonical_json(payload: Any) -> bytes:
     These must match exactly on both sides of the wire or HMAC
     verification will fail.
     """
+    # Round-9 audit fix R9-Wire-H4 (Apr 2026): refuse to serialise
+    # ``NaN`` / ``Infinity`` / ``-Infinity`` (``allow_nan=False``).
+    # Pre-fix Python's ``json.dumps`` emitted them as bare literals
+    # which (a) are NOT valid JSON, so any peer using strict JSON
+    # parsers (Pydantic via ``validate_json``) rejects after the
+    # signer signed OK — asymmetric verification failure that's
+    # invisible to the signing side; and (b) any payload carrying
+    # an integer value that survives a JS / msgpack round-trip and
+    # comes back as a float (``1`` → ``1.0``) re-canonicalises
+    # differently and breaks HMAC. Refusing NaN/Inf is a strict
+    # SHOULD per RFC 7159; the round-trip int/float shape requires
+    # contract discipline at the agent (we can't auto-canonicalise
+    # ints from floats without losing precision).
     return json.dumps(
         payload,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
+        allow_nan=False,
         default=_default_serializer,
     ).encode("utf-8")
 
