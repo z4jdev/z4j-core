@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-29
+
+### Added
+
+- **Worker-first protocol fields on `HelloPayload`.** Optional
+  additive fields: `worker_id`, `worker_role`, `worker_pid`,
+  `worker_started_at`. Pre-1.2.0 agents that omit them keep the
+  historical "one connection per agent_id" semantics; 1.2.0+
+  agents that send them are registered as discrete worker
+  connections, allowing N concurrent connections per agent_id
+  (one per gunicorn / Celery worker process). The brain
+  inspects these fields at handshake time to decide which mode
+  applies. Backward-compatible: old brains ignore the new
+  fields (Pydantic `extra="ignore"`); old agents work unchanged
+  against new brains.
+- **`Config.worker_role`** field. Optional operator-set role
+  hint (`web` / `task` / `scheduler` / `beat` / `other`) that
+  agents forward to the brain in their Hello frame. Surfaces in
+  the dashboard's worker filter (1.2.1+).
+
+
 ## [1.1.0] - 2026-04-28
 
 > Coordinated ecosystem release alongside `z4j-brain` 1.1.0,

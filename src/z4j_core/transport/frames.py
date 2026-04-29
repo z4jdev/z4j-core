@@ -121,6 +121,31 @@ class HelloPayload(BaseModel):
     capabilities: dict[str, list[str]] = Field(default_factory=dict)
     host: dict[str, Any] = Field(default_factory=dict)
 
+    # Worker-first protocol fields (1.2.0+). All optional + additive:
+    # an agent that omits these is treated as a single-connection
+    # 1.1.x agent; an agent that sends them is registered as a
+    # discrete worker under its agent_id, and the brain accepts
+    # multiple concurrent connections sharing the same agent_id
+    # (one per worker). Pre-1.2.0 agents (no worker_id) keep the
+    # historical "one connection per agent_id" contract.
+    #
+    # ``worker_id`` is a stable identifier for THIS process. Agents
+    # generate it from ``<framework>-<pid>-<start_unix_ms>`` so two
+    # gunicorn workers on the same host with the same agent_token
+    # never collide. The brain treats (agent_id, worker_id) as the
+    # composite primary key for the worker connection.
+    #
+    # ``worker_role`` is one of "web" / "task" / "scheduler" /
+    # "beat" / "other" / None. Each framework/engine adapter
+    # declares its own role hint (django/flask/fastapi -> web;
+    # celery/rq/dramatiq/huey/arq/taskiq -> task; celerybeat ->
+    # beat; z4j-scheduler -> scheduler). Used by the dashboard
+    # for filtering and by alert rules ("any web worker dying").
+    worker_id: str | None = Field(default=None, max_length=128)
+    worker_role: str | None = Field(default=None, max_length=32)
+    worker_pid: int | None = Field(default=None, ge=0, le=2**31 - 1)
+    worker_started_at: datetime | None = None
+
 
 class HelloAckFrame(_FrameBase):
     """Brain's response to a successful ``hello``.
