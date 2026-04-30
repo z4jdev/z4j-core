@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg)](https://pypi.org/project/z4j-core/)
 [![License](https://img.shields.io/pypi/l/z4j-core.svg)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
 
-The z4j domain core — shared models, protocols, transport, redaction, policy.
+The z4j domain core, shared models, protocols, transport, redaction, policy.
 
 Pure-Python dependency for every z4j package. No framework / engine /
 database imports, so it can be vendored into agent processes without
@@ -14,18 +14,18 @@ agent package.
 
 ## What's in here
 
-- **Pydantic models** — `Task`, `Worker`, `Queue`, `Schedule`,
+- **Pydantic models**, `Task`, `Worker`, `Queue`, `Schedule`,
   `Event`, `Command`, `Agent`, plus the wire-frame envelope types
-- **Adapter protocols** — `QueueEngineAdapter`, `SchedulerAdapter`,
+- **Adapter protocols**, `QueueEngineAdapter`, `SchedulerAdapter`,
   `FrameworkAdapter`. Every framework / engine / scheduler package
   implements one or more of these.
-- **Wire protocol** — frame definitions and the HMAC envelope used
+- **Wire protocol**, frame definitions and the HMAC envelope used
   by the brain ↔ agent WebSocket transport (signed v2 protocol)
-- **Redaction engine** — strips secrets from logged event payloads
+- **Redaction engine**, strips secrets from logged event payloads
   (URLs, headers, kwargs, exceptions) before they hit the brain
-- **Policy types** — role-based action enums (Viewer / Operator /
+- **Policy types**, role-based action enums (Viewer / Operator /
   Admin), used by the brain's RBAC layer
-- **Error hierarchy** — shared exception classes so agents and brain
+- **Error hierarchy**, shared exception classes so agents and brain
   agree on what counts as `AuthorizationError` vs `NotFoundError`
   vs `ConflictError`
 
@@ -51,7 +51,7 @@ Full docs at [z4j.dev/concepts/architecture/](https://z4j.dev/concepts/architect
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0, see [LICENSE](LICENSE).
 
 ## Links
 

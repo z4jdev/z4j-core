@@ -165,7 +165,7 @@ class HelloAckPayload(BaseModel):
     # Round-9 audit fix R9-Wire-LOW (Apr 2026): mirror the caps
     # already on HelloPayload so a hostile/buggy peer can't ship a
     # 100MB string in any handshake field. Pre-handshake DoS
-    # surface — Pydantic walks each string before HMAC check.
+    # surface, Pydantic walks each string before HMAC check.
     protocol_version: str = Field(max_length=40)
     brain_version: str = Field(max_length=40)
     agent_id: str = Field(max_length=64)
@@ -198,7 +198,7 @@ class EventBatchPayload(BaseModel):
     # Round-8 audit fix R8-Pyd-H1 (Apr 2026): hard cap on the
     # ``events`` list. The WS gateway's bytes cap and the
     # frame-router's iteration cap (R7) are both downstream of
-    # Pydantic parse time — without this, the validator walks an
+    # Pydantic parse time, without this, the validator walks an
     # unbounded list before either kicks in. 5000 is generous
     # (500 is the agent's batcher ceiling) and far below the
     # pre-existing 1 MiB frame-bytes cap.
@@ -468,7 +468,7 @@ def canonical_json(payload: Any) -> bytes:
     # Pre-fix Python's ``json.dumps`` emitted them as bare literals
     # which (a) are NOT valid JSON, so any peer using strict JSON
     # parsers (Pydantic via ``validate_json``) rejects after the
-    # signer signed OK — asymmetric verification failure that's
+    # signer signed OK, asymmetric verification failure that's
     # invisible to the signing side; and (b) any payload carrying
     # an integer value that survives a JS / msgpack round-trip and
     # comes back as a float (``1`` → ``1.0``) re-canonicalises

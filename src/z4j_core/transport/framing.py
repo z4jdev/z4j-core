@@ -68,8 +68,8 @@ class FrameSigner:
         self._project_id = str(project_id)
         # Round-9 audit fix R9-Wire-H1+H2 (Apr 2026): bind the
         # session_id into the signed envelope. Pre-fix the seq
-        # counter and nonce window were instance-scoped — they
-        # reset to 0 on every reconnect — so an attacker who
+        # counter and nonce window were instance-scoped, they
+        # reset to 0 on every reconnect, so an attacker who
         # captured a frame from session N could replay it inside
         # session N+1 (seq > 0, ts within the 60s skew window,
         # nonce never seen by the new instance). Binding session_id
@@ -173,7 +173,7 @@ class FrameVerifier:
         # ``not isinstance(_SignedFrameBase)``. Future frame types
         # added to the union must be either a subclass of
         # ``_SignedFrameBase`` (signed) OR explicitly listed here
-        # (unsigned handshake) — anything else is rejected with a
+        # (unsigned handshake), anything else is rejected with a
         # ProtocolError. Closes the silent-bypass risk where a new
         # frame class accidentally inherits from neither
         # ``_SignedFrameBase`` nor the handshake set.
