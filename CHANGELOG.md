@@ -5,6 +5,37 @@ All notable changes to this package are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-04-30
+
+**Schedule snapshot event kind for full-inventory reconciliation.**
+
+### Added
+
+- `EventKind.SCHEDULE_SNAPSHOT` (wire value: `schedule.snapshot`).
+  Carries the full inventory of every schedule one scheduler
+  adapter (celery-beat, apscheduler, rq-scheduler, arqcron,
+  hueyperiodic, taskiqscheduler) currently observes. Event payload
+  shape (in `data`):
+  ```
+  {
+    "scheduler": str,
+    "schedules": list[dict],
+    "reason": "boot" | "periodic" | "command"
+  }
+  ```
+  Emitted by the agent at boot (Phase A), on a periodic timer
+  (Phase B, default 15 min), and on demand from the brain's
+  `schedule.resync` command (Phase C, the dashboard *Sync now*
+  button). Closes the long-standing onboarding gap where existing
+  celery-beat schedules were invisible to the dashboard until the
+  operator edited each one. Companion features in z4j-bare 1.3.1
+  (the emitter side) and z4j-brain 1.3.3 (the reconciler side).
+
+### Compatibility
+
+Additive enum value. No breaking change. Older z4j-bare / z4j-brain
+keep working; they simply don't emit / handle the new kind.
+
 ## [1.3.0] - 2026-05-15
 
 **Initial release of the 1.3.x line.**

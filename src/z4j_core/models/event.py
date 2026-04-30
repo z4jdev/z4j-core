@@ -55,6 +55,16 @@ class EventKind(StrEnum):
     SCHEDULE_CREATED = "schedule.created"
     SCHEDULE_UPDATED = "schedule.updated"
     SCHEDULE_DELETED = "schedule.deleted"
+    # Full inventory drop. Carries every schedule the agent's
+    # adapter currently observes so the brain can reconcile
+    # (insert new, update existing, soft-delete missing) in one
+    # transaction. Emitted by the agent at boot, on a periodic
+    # timer, and on demand via the ``schedule.resync`` command.
+    # Event payload shape (in ``data``): ``{scheduler: str,
+    # schedules: list[dict], reason: "boot"|"periodic"|"command"}``.
+    # Added in 1.3.1 to close the "celery-beat schedules don't
+    # show up until I edit them" gap. See docs/SCHEDULER.md §13.2.
+    SCHEDULE_SNAPSHOT = "schedule.snapshot"
 
     # Unknown / unrecognized
     UNKNOWN = "unknown"
