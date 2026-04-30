@@ -1,127 +1,61 @@
 # Changelog
 
-All notable changes to `z4j-core` are documented in this file.
+All notable changes to this package are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-15
+
+**Initial release of the 1.3.x line.**
+
+z4j 1.3.0 is a clean-slate reset of the 1.x ecosystem. All prior
+1.x versions on PyPI (1.0.x, 1.1.x, 1.2.x) are yanked — they
+remain installable by exact pin but `pip install` no longer
+selects them. Operators upgrading from any prior 1.x deployment
+are expected to back up their database and run a fresh install
+against 1.3.x; there is no in-place migration path.
+
+### Why the reset
+
+The 1.0/1.1/1.2 line accumulated complexity organically across
+many small releases. By 1.2.2 the codebase carried defensive
+shims, deep audit-history annotations, and a 19-step alembic
+migration chain that made onboarding harder than it needed to
+be. 1.3.0 ships the same feature set as 1.2.2 but with:
+
+- One consolidated alembic migration containing the entire
+  schema, with explicit `compat` metadata declaring the version
+  window in which it can be applied.
+- HMAC canonical form starts at v1 (no v1→v4 fallback chain in
+  the verifier).
+- Defensive `getattr` shims removed for fields that exist in the
+  final model.
+- "Audit fix Round-N" annotations removed from the codebase.
+
+### Release discipline (new)
+
+PyPI publishes now require an explicit `Z4J_PUBLISH_AUTHORIZED=1`
+environment variable to be set in the publish-script invocation.
+The 1.0-1.2 wave shipped patches too quickly and had to yank/
+unyank versions; the new gate makes that mistake impossible.
+
+### Migrating from 1.x
+
+1. Back up your database (`z4j-brain backup --out backup.sql`).
+2. Bring the brain down.
+3. `pip install -U z4j` to pick up 1.3.0.
+4. `z4j-brain migrate upgrade head` runs the consolidated
+   migration; it detects an empty `alembic_version` table and
+   applies the single `v1_3_0_initial` revision.
+5. Bring the brain back up. The dashboard, audit log, and
+   schedule data structures are preserved across the migration
+   when the operator restores from the backup; if you started
+   fresh, you'll see an empty brain.
+
+### See also
+
+- `CHANGELOG-1.x-legacy.md` in this package's source tree for
+  the complete 1.0/1.1/1.2 release history.
+
 ## [Unreleased]
-
-## [1.2.0] - 2026-04-29
-
-### Added
-
-- **Worker-first protocol fields on `HelloPayload`.** Optional
-  additive fields: `worker_id`, `worker_role`, `worker_pid`,
-  `worker_started_at`. Pre-1.2.0 agents that omit them keep the
-  historical "one connection per agent_id" semantics; 1.2.0+
-  agents that send them are registered as discrete worker
-  connections, allowing N concurrent connections per agent_id
-  (one per gunicorn / Celery worker process). The brain
-  inspects these fields at handshake time to decide which mode
-  applies. Backward-compatible: old brains ignore the new
-  fields (Pydantic `extra="ignore"`); old agents work unchanged
-  against new brains.
-- **`Config.worker_role`** field. Optional operator-set role
-  hint (`web` / `task` / `scheduler` / `beat` / `other`) that
-  agents forward to the brain in their Hello frame. Surfaces in
-  the dashboard's worker filter (1.2.1+).
-
-
-## [1.1.0] - 2026-04-28
-
-> Coordinated ecosystem release alongside `z4j-brain` 1.1.0,
-> `z4j-scheduler` 1.1.0, and the `z4j` umbrella 1.1.0. v1.1.x is the
-> ecosystem's always-works baseline - see `docs/MIGRATIONS.md` in the
-> z4j repo for the additive-only compatibility contract.
-
-### Security (round-9 audit, wire protocol)
-
-- **Cross-session replay attack closed.** Pre-fix the wire
-  protocol's HMAC envelope did not include the connection's
-  `session_id`. Combined with the agent's per-session reset of
-  `seq + nonce` counters, this meant an attacker who recorded a
-  signed envelope from session A could replay it into session B
-  (both sessions had independent counter spaces starting at the
-  same low values, so the replay-guard's `seq` check passed).
-  Fix in `transport/framing.py`: signer and verifier now bind the
-  `session_id` into the signed payload. Verifier rejects the
-  frame if the embedded session_id doesn't match the connection
-  context. Wired in both the WebSocket and long-poll codepaths
-  (brain side + agent side both get the protection).
-- **`canonical_json` now refuses `NaN`/`Infinity`.** Pre-fix
-  `json.dumps(allow_nan=True)` would accept these values on the
-  signer side, but Python's `json.loads` accepts them
-  asymmetrically - and `int`/`float` round-tripping produced
-  divergent canonical forms across versions. The asymmetric
-  acceptance was a working footgun for verification mismatches.
-  Now `allow_nan=False` everywhere; non-finite floats raise at
-  the signer boundary so the operator sees a clear error.
-
-### Added
-
-- **`Schedule` model gains `catch_up`, `source`, `source_hash`** to
-  match the brain's SQLAlchemy schema. Without these, every external
-  SDK consumer that called `GET /api/schedules` against a brain on
-  the new schema would have failed Pydantic validation on a perfectly
-  normal response (the model uses `extra="forbid"`). All three fields
-  ship with defaults (`CatchUpPolicy.SKIP`, `"dashboard"`, `None`) so
-  callers building a `Schedule` from scratch don't need to pass them.
-- **`CatchUpPolicy` StrEnum** (`skip` / `fire_one_missed` /
-  `fire_all_missed`) for type-safe access to the new field. Exported
-  from `z4j_core.models`. Pinned by
-  `tests/unit/test_models.py::TestSchedule`.
-
-## [1.0.4] - 2026-04-24
-
-### Added
-
-- **`BufferStorageError` exception** in `z4j_core.errors` (subclass of `ConfigError`). Raised by the agent when the on-disk SQLite buffer directory is unwritable AND every fallback location was also unusable. Operators see a clean diagnostic line with the offending path, the running uid, and the canonical `Z4J_BUFFER_PATH` override - instead of a raw `PermissionError` traceback buried in worker logs. Required for the buffer-path fallback in z4j-bare 1.0.6.
-
-## [1.0.3] - 2026-04-24
-
-### Changed
-
-- **`Config.buffer_path` default is now per-process.** Was `~/.z4j/buffer.sqlite` (one shared file across every agent runtime in the same user). Now `~/.z4j/buffer-{pid}.sqlite` (one file per Python process). Fixes a real drift bug where two agent runtimes (e.g. Django web + Celery worker) sharing one file kept their own in-memory cached counters that drifted out of sync, producing the `cached counters drifted negative` WARNING in the worker log. SQLite WAL handled the concurrent writes correctly; only the per-process count cache was wrong. Per-process paths make the bug structurally impossible.
-- The PID is captured at `Config()` instantiation time (via `Field(default_factory=...)`), not at module import. Multiple `Config()` calls in the same process resolve to the same path.
-
-### Migration notes
-
-If you have an existing `~/.z4j/buffer.sqlite` with un-drained events from a pre-1.0.3 install, those events stay where they are - the new default points at a different file. To recover the legacy buffer, either set `Z4J_BUFFER_PATH=~/.z4j/buffer.sqlite` for ONE process and let it drain, OR delete `~/.z4j/buffer.sqlite` if you don't care about the queued events (in practice the buffer empties within seconds whenever the brain is reachable; long-queued events are unusual).
-
-## [1.0.1] - 2026-04-21
-
-### Changed
-
-- Lowered minimum Python version from 3.13 to 3.11. This package now supports Python 3.11, 3.12, 3.13, and 3.14.
-- Documentation polish: standardized on ASCII hyphens across README, CHANGELOG, and docstrings for consistent rendering on PyPI.
-
-
-## [1.0.0] - 2026-04
-
-### Added
-
-- First public release.
-- Pydantic v2 domain models under `z4j_core.models`: `Project`, `Agent`, `Task`, `Queue`, `Worker`, `Schedule`, `Command`, `CommandResult`, `Event`, `AuditEntry`, `User`, `Config`, `Delta`.
-- The three adapter Protocols under `z4j_core.protocols`: `QueueEngineAdapter` (15 methods), `FrameworkAdapter`, `SchedulerAdapter` (7 methods).
-- Exception hierarchy rooted at `Z4JError` in `z4j_core.errors`.
-- Recursive secret-redaction engine under `z4j_core.redaction` with default patterns and per-field overrides.
-- Wire-protocol primitives under `z4j_core.transport`: frame shapes, `PROTOCOL_VERSION = "2"`, HMAC v2 sign/verify helpers.
-- Permission engine under `z4j_core.policy` (`can(user, action, project)`).
-- `PROTOCOL_VERSION` constant for runtime compatibility checks between brain and agents.
-- 271 unit tests.
-- `py.typed` marker (PEP 561) - full static-type coverage.
-
-### Guarantees
-
-- No runtime dependencies beyond Pydantic and `typing-extensions`.
-- No imports of Django, Celery, Flask, FastAPI, Redis, SQLAlchemy, RQ, Dramatiq, websockets, httpx, or any other framework/engine/transport library. This is enforced by `import-linter` in CI.
-
-## Links
-
-- Repository: <https://github.com/z4jdev/z4j-core>
-- Issues: <https://github.com/z4jdev/z4j-core/issues>
-- PyPI: <https://pypi.org/project/z4j-core/>
-
-[Unreleased]: https://github.com/z4jdev/z4j-core/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/z4jdev/z4j-core/releases/tag/v1.0.0
