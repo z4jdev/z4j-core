@@ -1,8 +1,8 @@
 # z4j-core
 
-[![PyPI version](https://img.shields.io/pypi/v/z4j-core.svg)](https://pypi.org/project/z4j-core/)
-[![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg)](https://pypi.org/project/z4j-core/)
-[![License](https://img.shields.io/pypi/l/z4j-core.svg)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/z4j-core.svg?v=1.4.0)](https://pypi.org/project/z4j-core/)
+[![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg?v=1.4.0)](https://pypi.org/project/z4j-core/)
+[![License](https://img.shields.io/pypi/l/z4j-core.svg?v=1.4.0)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
 
 The z4j domain core, shared models, protocols, transport, redaction, policy.
 
