@@ -9,7 +9,7 @@ The z4j domain core, shared models, protocols, transport, redaction, policy.
 Pure-Python dependency for every z4j package. No framework / engine /
 database imports, so it can be vendored into agent processes without
 dragging server runtime weight. End users do not install this package
-directly; it ships as a transitive dependency of the brain or any
+directly; it ships as a transitive dependency of z4j or any
 agent package.
 
 ## What's in here
@@ -20,7 +20,7 @@ agent package.
   `FrameworkAdapter`. Every framework / engine / scheduler package
   implements one or more of these.
 - **Wire protocol**, frame definitions and the HMAC envelope used
-  by the brain ↔ agent WebSocket transport (signed v2 protocol)
+  by z4j ↔ agent WebSocket transport (signed v2 protocol)
 - **Redaction engine**, strips secrets from logged event payloads
   (URLs, headers, kwargs, exceptions) before they hit the brain
 - **Policy types**, role-based action enums (Viewer / Operator /
