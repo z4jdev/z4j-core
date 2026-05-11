@@ -78,7 +78,7 @@ class RedactionEngine:
         # Combined-alternation regex across every value pattern, so
         # scrub does ONE re.search per string instead of N separate
         # searches. Negligible for small inputs, meaningful savings
-        # on large tracebacks / task payloads (R3 finding M17).
+        # On large tracebacks / task payloads.
         # Individual ``self._value_patterns`` is retained for
         # ``value_matches()`` callers that want per-pattern
         # attribution and for tests.
@@ -155,9 +155,9 @@ class RedactionEngine:
         """True if ``value`` matches any value pattern.
 
         Uses one ``re.search`` over the combined alternation of
-        every value pattern (R3 finding M17) - single pass instead
-        of N separate searches. Falls back to the per-pattern list
-        when the combined regex is empty (all patterns disabled).
+        every value pattern - single pass instead of N separate
+        searches. Falls back to the per-pattern list when the
+        combined regex is empty (all patterns disabled).
         """
         if self._value_regex is not None:
             return self._value_regex.search(value) is not None
@@ -235,7 +235,7 @@ class RedactionEngine:
             # using it. A user putting a secret as a dict key
             # (uncommon but real - e.g. `{stripe_token_value: 1}`
             # in some SDK adapters) would otherwise persist the
-            # secret-shaped key verbatim (R3 finding H9). Key-name
+            # Secret-shaped key verbatim. Key-name
             # patterns intentionally don't apply to themselves.
             scrubbed_key = self._scrub_scalar(
                 key_str, inside_redacted_key=False,

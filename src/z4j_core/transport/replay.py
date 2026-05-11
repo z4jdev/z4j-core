@@ -141,12 +141,11 @@ class ReplayGuard:
 def _parse_iso(raw: Any) -> datetime:
     """Parse an ISO 8601 timestamp. Naive timestamps are REJECTED.
 
-    Round-9 audit fix R9-Wire-MED (Apr 2026): pre-fix the parser
-    silently re-tagged naive datetimes as UTC. An agent whose
-    serialiser dropped the tz suffix landed under a bogus UTC
-    interpretation, manifesting as either "skew=25200s" rejections
-    on legit traffic OR (worse) accepting a captured frame whose
-    recorded ts was naïve under a favourable re-interpretation.
+    A naive datetime would otherwise get silently re-tagged as UTC. An
+    agent whose serialiser dropped the tz suffix would land under a
+    bogus UTC interpretation, manifesting as either "skew=25200s"
+    rejections on legit traffic OR (worse) accepting a captured frame
+    whose recorded ts was naïve under a favourable re-interpretation.
     Refusing naïve timestamps is the safer default.
     """
     if isinstance(raw, datetime):

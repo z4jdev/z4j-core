@@ -76,7 +76,7 @@ class _SignedFrameBase(_FrameBase):
     then rejects any incoming frame whose envelope doesn't match.
     """
 
-    # Round-9 audit fix R9-Wire-LOW (Apr 2026): tighten nonce cap.
+    # Tighten nonce cap.
     # ``make_nonce()`` returns ``secrets.token_urlsafe(16)`` = 22
     # chars; the prior 64-cap let a peer ship 64-byte nonces and
     # bloat the OrderedDict's per-entry size 3×. 32 covers any
@@ -106,13 +106,13 @@ class HelloFrame(_FrameBase):
 class HelloPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): cap list/dict
-    # cardinality on every wire-frame payload. Pre-fix a single
-    # signed handshake could carry a 10M-element ``engines`` list
-    # or ``capabilities`` dict, OOM-walking the validator before
-    # the WS gateway's frame-bytes cap kicked in. The values below
-    # are 100x any realistic agent (a fleet shipping 5 engines and
-    # 3 schedulers with ~10 capabilities each).
+    # Cap list/dict cardinality on every wire-frame payload.
+    # Without these caps a single signed handshake could carry a
+    # 10M-element ``engines`` list or ``capabilities`` dict,
+    # OOM-walking the validator before the WS gateway's
+    # frame-bytes cap kicked in. The values below are 100x any
+    # realistic agent (a fleet shipping 5 engines and 3 schedulers
+    # with ~10 capabilities each).
     protocol_version: str = Field(max_length=40)
     agent_version: str = Field(max_length=40)
     framework: str = Field(max_length=40)
@@ -162,8 +162,8 @@ class HelloAckFrame(_FrameBase):
 class HelloAckPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-9 audit fix R9-Wire-LOW (Apr 2026): mirror the caps
-    # already on HelloPayload so a hostile/buggy peer can't ship a
+    # Mirror the caps already on HelloPayload so a hostile/buggy
+    # peer can't ship a
     # 100MB string in any handshake field. Pre-handshake DoS
     # surface, Pydantic walks each string before HMAC check.
     protocol_version: str = Field(max_length=40)
@@ -195,8 +195,8 @@ class EventBatchFrame(_SignedFrameBase):
 class EventBatchPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): hard cap on the
-    # ``events`` list. The WS gateway's bytes cap and the
+    # Hard cap on the ``events`` list. The WS gateway's bytes
+    # cap and the
     # frame-router's iteration cap (R7) are both downstream of
     # Pydantic parse time, without this, the validator walks an
     # unbounded list before either kicks in. 5000 is generous
@@ -217,6 +217,17 @@ class EventBatchAckFrame(_SignedFrameBase):
 class EventBatchAckPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
+    # Correlates the ack to the agent's original event_batch frame
+    # so the agent only confirms-and-deletes buffer entries the
+    # brain has actually accepted. Without this round-trip, any
+    # brain-side drop (deadlock, restart mid-batch, ingest queue
+    # full) would silently lose events because the agent confirms
+    # against ws-layer ``send()`` success alone. The ``acked_id``
+    # carries the original ``EventBatchFrame.id`` so the agent can
+    # pop the matching pending entry off its in-flight map. Default
+    # empty string keeps Pydantic happy on legacy callers that
+    # don't set it (the agent then falls back to legacy mode).
+    acked_id: str = Field(default="", max_length=64)
     received: int = Field(ge=0)
     accepted: int = Field(ge=0)
     rejected: int = Field(ge=0)
@@ -241,8 +252,8 @@ class HeartbeatFrame(_SignedFrameBase):
 class HeartbeatPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): bounded counters and
-    # adapter_health. ``ge=0`` is already enforced; we add a sanity
+    # Bounded counters and adapter_health. ``ge=0`` is already
+    # enforced; we add a sanity
     # ``le`` cap on ints so a hostile heartbeat can't poison
     # downstream metric exporters with int64-max values.
     buffer_size: int = Field(default=0, ge=0, le=10_000_000)
@@ -273,8 +284,8 @@ class CommandFrame(_SignedFrameBase):
 class CommandPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): bound the command
-    # envelope. ``action`` is a known short token; ``issued_by``
+    # Bound the command envelope. ``action`` is a known short
+    # token; ``issued_by``
     # is a UUID string; ``target`` and ``parameters`` are still
     # ``dict`` (per-command shape varies) but the WS gateway's
     # frame-bytes cap remains the outer bound.
@@ -312,7 +323,7 @@ class CommandResultPayload(BaseModel):
 
     status: Literal["success", "failed"]
     result: dict[str, Any] | None = None
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): ``error`` is rendered
+    # ``error`` is rendered
     # in the audit log + dashboard; cap to keep a hostile or buggy
     # adapter from inflating either by emitting a 100MB traceback.
     error: str | None = Field(default=None, max_length=8192)
@@ -333,7 +344,7 @@ class RegistryDeltaFrame(_SignedFrameBase):
 class RegistryDeltaPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026): cap registry-delta
+    # Cap registry-delta
     # cardinality. A typical adapter ships 10-200 task definitions;
     # 10000 covers monorepo-scale projects with substantial headroom
     # while bounding the validator walk.
@@ -358,10 +369,74 @@ class ErrorFrame(_SignedFrameBase):
 class ErrorPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
-    # Round-8 audit fix R8-Pyd-H1 (Apr 2026).
     code: str = Field(max_length=80)
     message: str = Field(max_length=8192)
     fatal: bool = False
+
+
+# ---------------------------------------------------------------------------
+# 8) agent_status - Phase H. Periodic agent self-report.
+# ---------------------------------------------------------------------------
+
+
+class AgentStatusFrame(_SignedFrameBase):
+    """Periodic agent self-report.
+
+    Emitted alongside the heartbeat (default 10s cadence). Carries
+    per-error-class consecutive failure counts, last-success
+    timestamp, current session age, buffer depth, and version
+    metadata. The brain persists each frame to ``agent_status_history``
+    so the dashboard can render a per-agent flap timeline without
+    parsing logs.
+
+    Signed in v2 because it influences operator-facing health and
+    automated alerting; an unsigned variant could be forged by a
+    stolen bearer to hide an actual flap.
+    """
+
+    type: Literal["agent_status"] = "agent_status"
+    payload: "AgentStatusPayload"
+
+
+class AgentStatusPayload(BaseModel):
+    model_config = ConfigDict(strict=True, extra="ignore")
+
+    # Per-error-class consecutive failure counts since the last
+    # successful handshake. All three reset to 0 on connect; bumped
+    # by the supervisor's except* branches per error class.
+    auth_failure_streak: int = Field(default=0, ge=0, le=1_000_000)
+    protocol_failure_streak: int = Field(default=0, ge=0, le=1_000_000)
+    connection_failure_streak: int = Field(default=0, ge=0, le=1_000_000)
+
+    # When the current (or most recent) handshake completed. None
+    # before the agent has ever connected. Used by the dashboard to
+    # show "connected for 4h12m" / "disconnected since 14:22".
+    last_successful_connect_at: datetime | None = None
+
+    # How long the current session has been live. None when the
+    # agent is in a backoff window between connects.
+    current_session_age_seconds: float | None = Field(
+        default=None, ge=0.0, le=315_360_000.0,  # 10 years cap
+    )
+
+    # Local buffer state - depth and oldest entry age. Useful for
+    # detecting "agent connected but ingest stuck on the brain side"
+    # vs "agent fine, brain lagging."
+    buffer_depth: int = Field(default=0, ge=0, le=10_000_000)
+    buffer_oldest_age_seconds: float | None = Field(
+        default=None, ge=0.0, le=315_360_000.0,
+    )
+
+    # Version metadata. Surfaces in the dashboard so an operator
+    # spotting a flapping agent can immediately tell whether the
+    # version is a known-bad release.
+    agent_version: str = Field(default="", max_length=40)
+    protocol_version: str = Field(default="", max_length=10)
+
+    # Adapter inventory - which engines/schedulers are wired up.
+    # Caps copied from HelloPayload to bound replay-attack damage.
+    engines: list[str] = Field(default_factory=list, max_length=32)
+    schedulers: list[str] = Field(default_factory=list, max_length=32)
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +454,8 @@ Frame = Annotated[
     | CommandAckFrame
     | CommandResultFrame
     | RegistryDeltaFrame
-    | ErrorFrame,
+    | ErrorFrame
+    | AgentStatusFrame,
     Field(discriminator="type"),
 ]
 """Discriminated union of every frame shape on the wire.
@@ -402,6 +478,7 @@ FRAME_TYPES: frozenset[str] = frozenset(
         "command_result",
         "registry_delta",
         "error",
+        "agent_status",
     },
 )
 
@@ -463,19 +540,19 @@ def canonical_json(payload: Any) -> bytes:
     These must match exactly on both sides of the wire or HMAC
     verification will fail.
     """
-    # Round-9 audit fix R9-Wire-H4 (Apr 2026): refuse to serialise
-    # ``NaN`` / ``Infinity`` / ``-Infinity`` (``allow_nan=False``).
-    # Pre-fix Python's ``json.dumps`` emitted them as bare literals
-    # which (a) are NOT valid JSON, so any peer using strict JSON
-    # parsers (Pydantic via ``validate_json``) rejects after the
-    # signer signed OK, asymmetric verification failure that's
-    # invisible to the signing side; and (b) any payload carrying
-    # an integer value that survives a JS / msgpack round-trip and
-    # comes back as a float (``1`` → ``1.0``) re-canonicalises
-    # differently and breaks HMAC. Refusing NaN/Inf is a strict
-    # SHOULD per RFC 7159; the round-trip int/float shape requires
-    # contract discipline at the agent (we can't auto-canonicalise
-    # ints from floats without losing precision).
+    # Refuse to serialise ``NaN`` / ``Infinity`` / ``-Infinity``
+    # (``allow_nan=False``). Python's ``json.dumps`` would otherwise
+    # emit them as bare literals which (a) are NOT valid JSON, so
+    # any peer using strict JSON parsers (Pydantic via
+    # ``validate_json``) rejects after the signer signed OK, an
+    # asymmetric verification failure invisible to the signing
+    # side; and (b) any payload carrying an integer value that
+    # survives a JS / msgpack round-trip and comes back as a float
+    # (``1`` → ``1.0``) re-canonicalises differently and breaks
+    # HMAC. Refusing NaN/Inf is a strict SHOULD per RFC 7159; the
+    # round-trip int/float shape requires contract discipline at
+    # the agent (we can't auto-canonicalise ints from floats
+    # without losing precision).
     return json.dumps(
         payload,
         sort_keys=True,
@@ -505,6 +582,7 @@ CommandAckFrame.model_rebuild()
 CommandResultFrame.model_rebuild()
 RegistryDeltaFrame.model_rebuild()
 ErrorFrame.model_rebuild()
+AgentStatusFrame.model_rebuild()
 
 
 __all__ = [
@@ -515,6 +593,8 @@ __all__ = [
     "CommandResultPayload",
     "ErrorFrame",
     "ErrorPayload",
+    "AgentStatusFrame",
+    "AgentStatusPayload",
     "EventBatchAckFrame",
     "EventBatchAckPayload",
     "EventBatchFrame",

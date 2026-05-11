@@ -16,6 +16,7 @@ from uuid import UUID
 from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
 
 from z4j_core.models._base import Z4JModel
+from z4j_core.paths import z4j_home
 
 
 def _default_buffer_path() -> Path:
@@ -31,17 +32,18 @@ def _default_buffer_path() -> Path:
     processes write to one file concurrently, but each process's
     cache only sees its own deltas - process A confirms 30 rows it
     never appended (drained from process B) and its cache underflows.
-    The drift was self-healed by a re-read on every heartbeat, but
-    the WARNING log line was noisy and the underlying bug was real.
-    Per-process paths make it impossible.
+    Per-process paths make this impossible.
 
     PID is captured at instance time, not at module import, so a
     re-instantiated Config in the same process gets the same PID.
     Empty buffer files get cleaned up on process shutdown by
-    BufferStore.close() (z4j-bare 1.0.4+) so we don't accumulate
-    buffer-{stale-pid}.sqlite files over many restarts.
+    BufferStore.close() so we don't accumulate stale-pid files over
+    many restarts.
+
+    Path is ``z4j_home() / f"buffer-{pid}.sqlite"``. Operators relocate
+    the parent directory via ``Z4J_HOME``; the buffer follows.
     """
-    return Path.home() / ".z4j" / f"buffer-{os.getpid()}.sqlite"
+    return z4j_home() / f"buffer-{os.getpid()}.sqlite"
 
 
 class Config(Z4JModel):

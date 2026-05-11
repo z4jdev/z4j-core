@@ -42,6 +42,7 @@ class TestFrameTypesSet:
             "command_result",
             "registry_delta",
             "error",
+            "agent_status",  # Phase H (1.5)
         }
         assert expected == set(FRAME_TYPES)
 

@@ -66,17 +66,16 @@ class FrameSigner:
         self._secret = secret
         self._agent_id = str(agent_id)
         self._project_id = str(project_id)
-        # Round-9 audit fix R9-Wire-H1+H2 (Apr 2026): bind the
-        # session_id into the signed envelope. Pre-fix the seq
-        # counter and nonce window were instance-scoped, they
-        # reset to 0 on every reconnect, so an attacker who
-        # captured a frame from session N could replay it inside
-        # session N+1 (seq > 0, ts within the 60s skew window,
-        # nonce never seen by the new instance). Binding session_id
-        # makes the captured frame's HMAC fail against the new
-        # session's verifier, since the verifier reconstitutes the
-        # envelope with the NEW session_id and the bytes signed
-        # under the OLD one no longer match.
+        # Bind the session_id into the signed envelope. The seq
+        # counter and nonce window are instance-scoped and reset
+        # to 0 on every reconnect, so without session binding an
+        # attacker who captured a frame from session N could replay
+        # it inside session N+1 (seq > 0, ts within the 60s skew
+        # window, nonce never seen by the new instance). Binding
+        # session_id makes the captured frame's HMAC fail against
+        # the new session's verifier, since the verifier
+        # reconstitutes the envelope with the NEW session_id and
+        # the bytes signed under the OLD one no longer match.
         #
         # Optional for backwards compat with existing tests +
         # legacy callers that haven't been updated. Production
@@ -103,9 +102,8 @@ class FrameSigner:
         envelope = frame.model_dump(mode="json")
         envelope["agent_id"] = self._agent_id
         envelope["project_id"] = self._project_id
-        # R9-Wire-H1+H2: also bind session_id so cross-session
-        # replays fail at HMAC verify, not just at the per-instance
-        # nonce window.
+        # Also bind session_id so cross-session replays fail at
+        # HMAC verify, not just at the per-instance nonce window.
         envelope["session_id"] = self._session_id
         frame.hmac = sign_envelope(self._secret, envelope)
         return serialize_frame(frame)
@@ -143,7 +141,7 @@ class FrameVerifier:
         self._secret = secret
         self._agent_id = str(agent_id)
         self._project_id = str(project_id)
-        # Round-9 audit fix R9-Wire-H1+H2 (Apr 2026): see
+        # See
         # FrameSigner above. Binds the verifier to one session so a
         # captured frame from a previous session fails HMAC.
         self._session_id = str(session_id) if session_id is not None else ""
@@ -168,7 +166,7 @@ class FrameVerifier:
                 f"expected {PROTOCOL_VERSION}",
             )
 
-        # Round-9 audit fix R9-Wire-MED (Apr 2026): explicit
+        # Explicit
         # ALLOW-LIST for unsigned frames rather than negative
         # ``not isinstance(_SignedFrameBase)``. Future frame types
         # added to the union must be either a subclass of
@@ -191,8 +189,8 @@ class FrameVerifier:
         envelope = frame.model_dump(mode="json")
         envelope["agent_id"] = self._agent_id
         envelope["project_id"] = self._project_id
-        # R9-Wire-H1+H2: include session_id so a frame signed
-        # under a different session's binding fails verification.
+        # Include session_id so a frame signed under a different
+        # session's binding fails verification.
         envelope["session_id"] = self._session_id
 
         # Order matters: check HMAC FIRST so an attacker who hasn't
