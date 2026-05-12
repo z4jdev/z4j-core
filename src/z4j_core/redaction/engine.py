@@ -78,7 +78,7 @@ class RedactionEngine:
         # Combined-alternation regex across every value pattern, so
         # scrub does ONE re.search per string instead of N separate
         # searches. Negligible for small inputs, meaningful savings
-        # On large tracebacks / task payloads.
+        # on large tracebacks / task payloads.
         # Individual ``self._value_patterns`` is retained for
         # ``value_matches()`` callers that want per-pattern
         # attribution and for tests.
