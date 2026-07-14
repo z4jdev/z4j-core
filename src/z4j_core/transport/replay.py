@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from z4j_core.errors import SignatureError
@@ -93,7 +93,7 @@ class ReplayGuard:
 
         # Freshness.
         ts_dt = _parse_iso(ts_raw)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         skew = abs((now - ts_dt).total_seconds())
         if skew > self._skew_seconds:
             raise SignatureError(
@@ -132,7 +132,7 @@ class ReplayGuard:
         # OrderedDict insertion order matches time order (monotonic
         # clock always advances) so we can pop from the front.
         while self._nonce_window:
-            oldest_nonce, inserted_at = next(iter(self._nonce_window.items()))
+            _oldest_nonce, inserted_at = next(iter(self._nonce_window.items()))
             if inserted_at >= cutoff:
                 return
             self._nonce_window.popitem(last=False)

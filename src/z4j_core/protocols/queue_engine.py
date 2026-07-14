@@ -114,7 +114,7 @@ class QueueEngineAdapter(Protocol):
         """
         ...
 
-    async def reconcile_task(self, task_id: str) -> "CommandResult":
+    async def reconcile_task(self, task_id: str) -> CommandResult:
         """Query the engine's result backend for authoritative state.
 
         Called by the brain's ``ReconciliationWorker`` when a task's
@@ -203,9 +203,9 @@ class QueueEngineAdapter(Protocol):
 
     async def bulk_retry(
         self,
-        filter: dict[str, Any],
+        filter: dict[str, Any],  # noqa: A002  public protocol param name mirrors REST query
         *,
-        max: int = 1000,
+        max: int = 1000,  # noqa: A002  public protocol param name mirrors REST query
     ) -> CommandResult:
         """Retry every task matching a filter, up to ``max`` tasks.
 

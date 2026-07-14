@@ -18,11 +18,11 @@ here fixes both sides simultaneously.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from z4j_core.errors import ProtocolError, SignatureError
+from z4j_core.errors import ProtocolError, ProtocolVersionError
 from z4j_core.transport.frames import (
     PROTOCOL_VERSION,
     Frame,
@@ -36,7 +36,6 @@ from z4j_core.transport.hmac import (
     verify_envelope,
 )
 from z4j_core.transport.replay import ReplayGuard
-
 
 # ---------------------------------------------------------------------------
 # Signed-frame fast-path tables (1.5.1 leak fix)
@@ -62,18 +61,28 @@ from z4j_core.transport.replay import ReplayGuard
 
 
 def _build_signed_frame_tables() -> tuple[
-    dict[str, type], dict[str, type], dict[str, frozenset[str]],
+    dict[str, type],
+    dict[str, type],
+    dict[str, frozenset[str]],
 ]:
-    from z4j_core.transport.frames import (  # noqa: PLC0415
-        AgentStatusFrame, AgentStatusPayload,
+    from z4j_core.transport.frames import (
+        AgentStatusFrame,
+        AgentStatusPayload,
         CommandAckFrame,
-        CommandFrame, CommandPayload,
-        CommandResultFrame, CommandResultPayload,
-        ErrorFrame, ErrorPayload,
-        EventBatchAckFrame, EventBatchAckPayload,
-        EventBatchFrame, EventBatchPayload,
-        HeartbeatFrame, HeartbeatPayload,
-        RegistryDeltaFrame, RegistryDeltaPayload,
+        CommandFrame,
+        CommandPayload,
+        CommandResultFrame,
+        CommandResultPayload,
+        ErrorFrame,
+        ErrorPayload,
+        EventBatchAckFrame,
+        EventBatchAckPayload,
+        EventBatchFrame,
+        EventBatchPayload,
+        HeartbeatFrame,
+        HeartbeatPayload,
+        RegistryDeltaFrame,
+        RegistryDeltaPayload,
     )
 
     frame_by_type: dict[str, type] = {
@@ -154,7 +163,11 @@ class FrameSigner:
     """
 
     __slots__ = (
-        "_secret", "_agent_id", "_project_id", "_session_id", "_next_seq",
+        "_agent_id",
+        "_next_seq",
+        "_project_id",
+        "_secret",
+        "_session_id",
     )
 
     def __init__(
@@ -196,7 +209,7 @@ class FrameSigner:
         are overwritten - the caller is expected to leave them as
         placeholders (e.g. ``nonce=""``, ``seq=0``, ``hmac=""``).
         """
-        frame.ts = datetime.now(timezone.utc)
+        frame.ts = datetime.now(UTC)
         frame.nonce = make_nonce()
         frame.seq = self._next_seq
         self._next_seq += 1
@@ -229,7 +242,11 @@ class FrameVerifier:
     """
 
     __slots__ = (
-        "_secret", "_agent_id", "_project_id", "_session_id", "_guard",
+        "_agent_id",
+        "_guard",
+        "_project_id",
+        "_secret",
+        "_session_id",
     )
 
     def __init__(
@@ -291,6 +308,28 @@ class FrameVerifier:
             raise ProtocolError(
                 f"frame must decode to a JSON object, got {type(raw_dict).__name__}",
             )
+        # Version gate FIRST -- before the type dispatch -- so a frame from a
+        # peer on a DIFFERENT protocol version raises the RECOVERABLE
+        # ProtocolVersionError (retry against an upgraded replica) even when
+        # the version bump also introduced a new frame TYPE this peer does
+        # not know: without this, that frame surfaces as an unknown-type
+        # ProtocolError and is drop-acked, losing a frame an upgraded replica
+        # would store (R9). ONLY an INT ``v`` that differs is a recoverable
+        # skew; a wrong-TYPE ``v`` (string / bool / float) is MALFORMED
+        # content -- a plain ProtocolError so it is drop-acked, not retried
+        # forever as if a version bump would fix it (round-8 external
+        # M-malformed-version). A missing ``v`` falls through to the type
+        # checks below.
+        version = raw_dict.get("v")
+        if type(version) is int:
+            if version != PROTOCOL_VERSION:
+                raise ProtocolVersionError(
+                    f"unsupported frame version {version!r}, expected {PROTOCOL_VERSION}",
+                )
+        elif version is not None:
+            raise ProtocolError(
+                f"frame ``v`` must be an integer, got {type(version).__name__}",
+            )
         frame_type = raw_dict.get("type")
         if not isinstance(frame_type, str):
             raise ProtocolError("frame missing required ``type`` field")
@@ -304,8 +343,7 @@ class FrameVerifier:
         # Signed frames take the fast path.
         if frame_type not in _SIGNED_FRAME_CLASS_BY_TYPE:
             raise ProtocolError(
-                f"unknown frame type {frame_type!r}; refusing to "
-                "process",
+                f"unknown frame type {frame_type!r}; refusing to process",
             )
         return self._verify_signed_fast(raw_dict, frame_type)
 
@@ -316,15 +354,15 @@ class FrameVerifier:
         + version check + return without HMAC / replay (the session
         binding is still being negotiated, no shared secret yet).
         """
-        from z4j_core.transport.frames import (  # noqa: PLC0415
-            HelloAckFrame, HelloFrame,
+        from z4j_core.transport.frames import (
+            HelloAckFrame,
+            HelloFrame,
         )
 
         frame = parse_frame(data)
         if frame.v != PROTOCOL_VERSION:
-            raise ProtocolError(
-                f"unsupported frame version {frame.v!r}, "
-                f"expected {PROTOCOL_VERSION}",
+            raise ProtocolVersionError(
+                f"unsupported frame version {frame.v!r}, expected {PROTOCOL_VERSION}",
             )
         if not isinstance(frame, (HelloFrame, HelloAckFrame)):
             # Defence-in-depth: dispatcher already filtered, but if
@@ -339,7 +377,9 @@ class FrameVerifier:
         return frame
 
     def _verify_signed_fast(
-        self, raw_dict: dict[str, Any], frame_type: str,
+        self,
+        raw_dict: dict[str, Any],
+        frame_type: str,
     ) -> Frame:
         """Fast path for signed frames -- HMAC verify then model_construct.
 
@@ -372,16 +412,21 @@ class FrameVerifier:
         # Cheap checks that catch agent-code regressions FAST without
         # paying the full Pydantic price.
         # ------------------------------------------------------------
+        # By here parse_and_verify's top gate has already raised a
+        # ProtocolVersionError for an INT ``v`` that differs, so any ``v``
+        # that still fails this equality is missing/None (a wrong TYPE was
+        # rejected there too) -- i.e. MALFORMED, not a recoverable skew. Raise
+        # a plain ProtocolError so it is drop-acked, not retried forever
+        # (round-8 external M-malformed-version).
         if raw_dict.get("v") != PROTOCOL_VERSION:
             raise ProtocolError(
-                f"unsupported frame version {raw_dict.get('v')!r}, "
+                f"frame ``v`` missing or invalid: {raw_dict.get('v')!r}, "
                 f"expected {PROTOCOL_VERSION}",
             )
         payload = raw_dict.get("payload")
         if payload is not None and not isinstance(payload, dict):
             raise ProtocolError(
-                "signed frame payload must be a JSON object, got "
-                f"{type(payload).__name__}",
+                f"signed frame payload must be a JSON object, got {type(payload).__name__}",
             )
 
         # ------------------------------------------------------------

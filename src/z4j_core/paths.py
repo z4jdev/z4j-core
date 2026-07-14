@@ -18,6 +18,7 @@ references are forbidden.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import tempfile
@@ -87,7 +88,7 @@ def ensure_z4j_home(mode: int = 0o700) -> Path:
         # finding's TOCTOU window (mkdir + later chmod let a
         # concurrent process replace the dir with a symlink between
         # the two steps).
-        os.makedirs(home, mode=mode, exist_ok=True)
+        home.mkdir(mode=mode, parents=True, exist_ok=True)
     return home
 
 
@@ -130,19 +131,13 @@ def buffer_root() -> Path:
         # ``..\\..\\Users\\victim`` that traverse out of the temp
         # directory. Allow ASCII alphanumerics, dot, underscore,
         # hyphen; cap length at 32 to prevent oversized basenames.
-        raw = (
-            os.environ.get("USERNAME")
-            or os.environ.get("USER")
-            or "default"
-        )
+        raw = os.environ.get("USERNAME") or os.environ.get("USER") or "default"
         sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", raw)[:32] or "default"
         uid = sanitized
     fallback = Path(tempfile.gettempdir()) / f"z4j-{uid}"
     fallback.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(fallback, 0o700)
-    except OSError:
-        pass
+    with contextlib.suppress(OSError):
+        fallback.chmod(0o700)
     return fallback.resolve()
 
 
@@ -157,9 +152,7 @@ def reject_deprecated_path_env() -> None:
         RuntimeError: if any of ``Z4J_RUNTIME_DIR``, ``Z4J_BUFFER_DIR``,
             or ``Z4J_BUFFER_PATH`` are set.
     """
-    offenders = [
-        var for var in DEPRECATED_PATH_ENV_VARS if os.environ.get(var)
-    ]
+    offenders = [var for var in DEPRECATED_PATH_ENV_VARS if os.environ.get(var)]
     if not offenders:
         return
     listing = ", ".join(offenders)

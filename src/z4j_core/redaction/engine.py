@@ -18,7 +18,7 @@ line + branch coverage.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from z4j_core.errors import RedactionConfigError
 from z4j_core.redaction.markers import (
@@ -167,7 +167,7 @@ class RedactionEngine:
     # Internal recursion
     # ------------------------------------------------------------------
 
-    def _scrub(
+    def _scrub(  # noqa: PLR0911  recursive type-dispatch scrub
         self,
         data: object,
         *,
@@ -238,7 +238,8 @@ class RedactionEngine:
             # Secret-shaped key verbatim. Key-name
             # patterns intentionally don't apply to themselves.
             scrubbed_key = self._scrub_scalar(
-                key_str, inside_redacted_key=False,
+                key_str,
+                inside_redacted_key=False,
             )
             key_hit = inside_redacted_key or self.key_matches(key_str)
             result[scrubbed_key] = self._scrub(

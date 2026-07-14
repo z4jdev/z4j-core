@@ -101,7 +101,7 @@ class ConflictError(Z4JError):
     http_status = 409
 
 
-class RateLimitExceeded(Z4JError):
+class RateLimitExceeded(Z4JError):  # noqa: N818  public exported API name, renaming breaks consumers
     """The caller exceeded a rate-limit bucket.
 
     The error ``details`` should carry ``retry_after_seconds``.
@@ -126,6 +126,22 @@ class ProtocolError(Z4JError):
 
     code = "protocol_incompatible"
     http_status = 426
+
+
+class ProtocolVersionError(ProtocolError):
+    """A wire frame carries a DIFFERENT protocol version than this peer.
+
+    A subclass of :class:`ProtocolError` (so existing ``except
+    ProtocolError`` sites still catch it) that is distinguishable from a
+    truly-malformed / unknown-frame ``ProtocolError``. The distinction
+    matters for delivery bookkeeping: a version-skew frame is AUTHENTIC
+    and RECOVERABLE -- the identical bytes parse fine against a peer built
+    with the matching ``PROTOCOL_VERSION`` -- so during a rolling protocol
+    upgrade it must be RETRIED (it will land on an already-upgraded
+    replica), not dropped-and-acked as if permanently undeliverable.
+    """
+
+    code = "protocol_version_mismatch"
 
 
 class InvalidFrameError(Z4JError):

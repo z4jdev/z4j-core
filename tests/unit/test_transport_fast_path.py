@@ -8,6 +8,7 @@ both paths produce equivalent typed frames.
 See ``RELEASE-1.5.1-LEAK-FIX-DESIGN.md`` for the design rationale
 and the empirical pass/fail thresholds these tests support.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-
 from z4j_core.errors import ProtocolError, SignatureError
 from z4j_core.transport.frames import (
     EventBatchFrame,
@@ -28,14 +28,14 @@ from z4j_core.transport.frames import (
 )
 from z4j_core.transport.framing import FrameSigner, FrameVerifier
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _signer_verifier_pair(
-    *, secret: bytes | None = None,
+    *,
+    secret: bytes | None = None,
 ) -> tuple[FrameSigner, FrameVerifier]:
     """Build a matched signer/verifier with a shared session binding."""
     secret = secret or b"x" * 32
@@ -114,9 +114,7 @@ class TestRoundTrip:
         # Compare to second precision (wire format is ISO with
         # microsecond precision; this is a wider tolerance to absorb
         # any timezone normalisation in the round trip).
-        delta = abs(
-            (parsed.payload.last_flush_at - last_flush).total_seconds()
-        )
+        delta = abs((parsed.payload.last_flush_at - last_flush).total_seconds())
         assert delta < 1.0
         assert parsed.payload.buffer_size == 42
         assert parsed.payload.adapter_health == {"celery": "ok"}
@@ -171,11 +169,15 @@ class TestSecurityInvariants:
         agent_id = str(uuid4())
         project_id = str(uuid4())
         signer_a = FrameSigner(
-            secret=secret, agent_id=agent_id, project_id=project_id,
+            secret=secret,
+            agent_id=agent_id,
+            project_id=project_id,
             session_id="session-A",
         )
         verifier_b = FrameVerifier(
-            secret=secret, agent_id=agent_id, project_id=project_id,
+            secret=secret,
+            agent_id=agent_id,
+            project_id=project_id,
             session_id="session-B",
         )
         wire = signer_a.sign_and_serialize(_build_event_batch())
@@ -258,26 +260,99 @@ class TestDispatcherErrors:
     def test_wrong_protocol_version_rejected_on_fast_path(self) -> None:
         # Build a syntactically-correct envelope claiming v=99 for a
         # signed frame type. The fast path's shape sanity check must
-        # reject before touching HMAC.
+        # reject before touching HMAC, and it must raise the DISTINCT
+        # ProtocolVersionError (a ProtocolError subclass) so the delivery
+        # bookkeeping can treat a version-skew frame as RECOVERABLE (retry
+        # against an upgraded replica) rather than a permanent drop (C5).
+        from z4j_core.errors import ProtocolVersionError
+
         _, verifier = _signer_verifier_pair()
-        bad = json.dumps({
-            "v": 99,
-            "type": "event_batch",
-            "id": "x",
-            "payload": {"events": []},
-        }).encode()
-        with pytest.raises(ProtocolError, match="unsupported frame version"):
+        bad = json.dumps(
+            {
+                "v": 99,
+                "type": "event_batch",
+                "id": "x",
+                "payload": {"events": []},
+            }
+        ).encode()
+        with pytest.raises(ProtocolVersionError, match="unsupported frame version"):
             verifier.parse_and_verify(bad)
+
+    def test_unknown_type_is_not_a_version_error(self) -> None:
+        # An unknown/malformed frame at the MATCHING version is a
+        # ProtocolError but NOT a ProtocolVersionError -- it is
+        # deterministically undeliverable (dropped), unlike a recoverable
+        # version skew (C5).
+        from z4j_core.errors import ProtocolVersionError
+
+        _, verifier = _signer_verifier_pair()
+        with pytest.raises(ProtocolError) as exc_info:
+            verifier.parse_and_verify(b'{"type": "foo", "v": 2}')
+        assert not isinstance(exc_info.value, ProtocolVersionError)
+
+    def test_unknown_type_at_wrong_version_is_a_version_error(self) -> None:
+        # R9: a frame carrying a NEW type introduced by a version bump must
+        # surface as ProtocolVersionError (retry -> lands on an upgraded
+        # replica), not an unknown-type ProtocolError that gets drop-acked.
+        # The version gate runs BEFORE the type dispatch.
+        from z4j_core.errors import ProtocolVersionError
+
+        _, verifier = _signer_verifier_pair()
+        with pytest.raises(ProtocolVersionError):
+            verifier.parse_and_verify(b'{"type": "metrics_batch", "v": 99, "id": "x"}')
+
+    def test_non_int_version_is_a_drop_not_a_version_skew(self) -> None:
+        # External round-8: only an INTEGER v that differs from the
+        # protocol version is a recoverable skew (retry -> upgraded
+        # replica). A v of the WRONG TYPE (string, float, bool, list,
+        # object) is a malformed frame no replica will ever accept, so it
+        # must raise a plain ProtocolError (deterministic DROP), never a
+        # retryable ProtocolVersionError -- otherwise the agent resends a
+        # structurally-broken frame forever.
+        from z4j_core.errors import ProtocolVersionError
+
+        _, verifier = _signer_verifier_pair()
+        for bad_v in ("2", 2.0, True, [2], {"n": 2}):
+            wire = json.dumps(
+                {
+                    "v": bad_v,
+                    "type": "event_batch",
+                    "id": "x",
+                    "payload": {"events": []},
+                }
+            ).encode()
+            with pytest.raises(ProtocolError) as exc_info:
+                verifier.parse_and_verify(wire)
+            assert not isinstance(exc_info.value, ProtocolVersionError), bad_v
+
+    def test_missing_version_is_a_drop_not_a_version_skew(self) -> None:
+        # A signed frame with no ``v`` at all is malformed (the field is
+        # mandatory on the wire), so it drops rather than retries.
+        from z4j_core.errors import ProtocolVersionError
+
+        _, verifier = _signer_verifier_pair()
+        wire = json.dumps(
+            {
+                "type": "event_batch",
+                "id": "x",
+                "payload": {"events": []},
+            }
+        ).encode()
+        with pytest.raises(ProtocolError) as exc_info:
+            verifier.parse_and_verify(wire)
+        assert not isinstance(exc_info.value, ProtocolVersionError)
 
     def test_non_object_payload_rejected(self) -> None:
         # Payload claiming to be a list (rather than dict) must fail
         # the shape sanity before HMAC.
         _, verifier = _signer_verifier_pair()
-        bad = json.dumps({
-            "v": 2,
-            "type": "event_batch",
-            "id": "x",
-            "payload": [1, 2, 3],
-        }).encode()
+        bad = json.dumps(
+            {
+                "v": 2,
+                "type": "event_batch",
+                "id": "x",
+                "payload": [1, 2, 3],
+            }
+        ).encode()
         with pytest.raises(ProtocolError, match="payload must be a JSON object"):
             verifier.parse_and_verify(bad)

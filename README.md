@@ -1,8 +1,8 @@
 # z4j-core
 
-[![PyPI version](https://img.shields.io/pypi/v/z4j-core.svg?v=1.6.7)](https://pypi.org/project/z4j-core/)
-[![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg?v=1.6.7)](https://pypi.org/project/z4j-core/)
-[![License](https://img.shields.io/pypi/l/z4j-core.svg?v=1.6.7)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/z4j-core.svg?v=1.7.0)](https://pypi.org/project/z4j-core/)
+[![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg?v=1.7.0)](https://pypi.org/project/z4j-core/)
+[![License](https://img.shields.io/pypi/l/z4j-core.svg?v=1.7.0)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
 
 The z4j domain core, shared models, protocols, transport, redaction, policy.
 
@@ -14,7 +14,7 @@ agent package.
 
 ## Compatibility
 
-Python 3.10+ (3.11+ when used inside the brain). Pure-Python, no framework or database imports.
+Python 3.11+. Pure-Python, no framework or database imports.
 
 Full per-adapter matrix at <https://z4j.dev/reference/compatibility/>.
 

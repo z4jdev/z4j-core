@@ -8,7 +8,6 @@ from __future__ import annotations
 import secrets
 
 import pytest
-
 from z4j_core.errors import SignatureError
 from z4j_core.transport import canonical_json, make_signature, verify_signature
 from z4j_core.transport.hmac import HMACVerifier, generate_project_secret

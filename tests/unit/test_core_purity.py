@@ -18,7 +18,6 @@ import pkgutil
 import sys
 
 import pytest
-
 import z4j_core
 
 FORBIDDEN_TOP_LEVEL: frozenset[str] = frozenset(
@@ -80,7 +79,7 @@ def test_z4j_core_version_is_set() -> None:
 
 def test_protocols_module_exports_all_three() -> None:
     """The three Protocols must be importable from ``z4j_core.protocols``."""
-    from z4j_core.protocols import (  # noqa: PLC0415
+    from z4j_core.protocols import (
         FrameworkAdapter,
         QueueEngineAdapter,
         SchedulerAdapter,
@@ -93,7 +92,7 @@ def test_protocols_module_exports_all_three() -> None:
 
 def test_models_module_exports_all_entities() -> None:
     """Every domain model listed in ``__all__`` must actually exist."""
-    from z4j_core import models  # noqa: PLC0415
+    from z4j_core import models
 
     for name in models.__all__:
         assert hasattr(models, name), f"z4j_core.models.__all__ lists {name!r} but it is missing"

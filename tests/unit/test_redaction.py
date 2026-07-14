@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-
 from z4j_core.errors import RedactionConfigError
 from z4j_core.redaction import (
     REDACTED,
@@ -59,12 +58,16 @@ class TestKeyRedaction:
         ],
     )
     def test_common_header_keys(
-        self, engine: RedactionEngine, key: str, value: str,
+        self,
+        engine: RedactionEngine,
+        key: str,
+        value: str,
     ) -> None:
         assert engine.scrub({key: value}) == {key: REDACTED}
 
     def test_redacts_numeric_value_behind_sensitive_key(
-        self, engine: RedactionEngine,
+        self,
+        engine: RedactionEngine,
     ) -> None:
         assert engine.scrub({"password": 12345}) == {"password": REDACTED}
 
@@ -77,7 +80,7 @@ class TestValuePatterns:
         # A 16-digit number doesn't strictly match the default patterns
         # (those require exact key or exact format), but an email does.
         # Use email as the canonical example instead.
-        _ = result  # noqa: F841
+        _ = result
 
     def test_redacts_email_in_value(self, engine: RedactionEngine) -> None:
         result = engine.scrub({"note": "Contact alice@example.com"})
@@ -210,7 +213,9 @@ class TestKeySetPreserved:
     )
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
     def test_key_set_is_preserved(
-        self, engine: RedactionEngine, d: dict[str, str],
+        self,
+        engine: RedactionEngine,
+        d: dict[str, str],
     ) -> None:
         scrubbed = engine.scrub(d)
         assert isinstance(scrubbed, dict)
@@ -248,7 +253,8 @@ class TestCycleSafety:
         assert isinstance(scrubbed, dict)
 
     def test_deeply_nested_does_not_blow_stack(
-        self, engine: RedactionEngine,
+        self,
+        engine: RedactionEngine,
     ) -> None:
         depth = 1000
         node: dict[str, object] = {"leaf": "ok"}

@@ -41,7 +41,6 @@ from typing import Any
 from z4j_core.errors import ConfigError
 from z4j_core.models import Config
 
-
 # Field name → canonical env var. Most are ``Z4J_<UPPER_FIELD>`` but
 # we list them explicitly so renames in Config don't silently break
 # the env contract.
@@ -65,17 +64,29 @@ _FIELD_TO_ENV: dict[str, str] = {
 }
 
 # Field type categories for coercion. Strings are passthrough.
-_INT_FIELDS = frozenset({
-    "heartbeat_seconds", "buffer_max_events", "buffer_max_bytes",
-    "max_payload_bytes",
-})
-_BOOL_FIELDS = frozenset({
-    "autostart", "strict_mode", "redaction_defaults_enabled",
-})
-_LIST_CSV_FIELDS = frozenset({
-    "engines", "schedulers",
-    "redaction_extra_key_patterns", "redaction_extra_value_patterns",
-})
+_INT_FIELDS = frozenset(
+    {
+        "heartbeat_seconds",
+        "buffer_max_events",
+        "buffer_max_bytes",
+        "max_payload_bytes",
+    }
+)
+_BOOL_FIELDS = frozenset(
+    {
+        "autostart",
+        "strict_mode",
+        "redaction_defaults_enabled",
+    }
+)
+_LIST_CSV_FIELDS = frozenset(
+    {
+        "engines",
+        "schedulers",
+        "redaction_extra_key_patterns",
+        "redaction_extra_value_patterns",
+    }
+)
 # Fields with their own list-CSV env var (Z4J_<FIELD_NAME_UPPER>).
 _LIST_ENV_VARS: dict[str, str] = {
     "engines": "Z4J_ENGINES",
@@ -98,9 +109,9 @@ _DEV_MODE_ENV_WARNING = (
 )
 
 
-def resolve_agent_config(
+def resolve_agent_config(  # noqa: PLR0912, PLR0915  unified config precedence resolver
     *,
-    framework_name: str,  # noqa: ARG001 - reserved for future per-framework defaults
+    framework_name: str,
     framework_overrides: Mapping[str, Any] | None = None,
     explicit_kwargs: Mapping[str, Any] | None = None,
     env: Mapping[str, str] | None = None,
@@ -216,13 +227,13 @@ def resolve_agent_config(
         return Config(**resolved)
     except ConfigError:
         raise
-    except Exception as exc:  # noqa: BLE001 - includes Pydantic ValidationError
+    except Exception as exc:
         raise ConfigError(
             f"invalid z4j agent configuration: {exc}",
         ) from exc
 
 
-def _coerce(field_name: str, value: Any) -> Any:
+def _coerce(field_name: str, value: Any) -> Any:  # noqa: PLR0911, PLR0912  per-field type coercion dispatch
     """Coerce a value to the target field's type.
 
     String inputs from env vars and YAML/JSON-flat-config values get
@@ -294,7 +305,7 @@ def _parse_tags(value: str) -> dict[str, str]:
     """Parse ``key1=val1,key2=val2`` style tag strings."""
     out: dict[str, str] = {}
     for pair in value.split(","):
-        pair = pair.strip()
+        pair = pair.strip()  # noqa: PLW2901  normalized in-loop
         if not pair or "=" not in pair:
             continue
         k, v = pair.split("=", 1)

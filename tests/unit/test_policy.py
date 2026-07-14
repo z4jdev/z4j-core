@@ -1,13 +1,12 @@
 """Unit tests for the z4j-core policy engine.
 
-Target coverage: 100% line + 100% branch on every (action × role)
+Target coverage: 100% line + 100% branch on every (action x role)
 combination. This is the single source of truth for authorization.
 """
 
 from __future__ import annotations
 
 import pytest
-
 from z4j_core.models import Membership, ProjectRole, User
 from z4j_core.policy import (
     Action,

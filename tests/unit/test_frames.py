@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 from pydantic import ValidationError
-
 from z4j_core.errors import ProtocolError
 from z4j_core.transport import (
     FRAME_TYPES,

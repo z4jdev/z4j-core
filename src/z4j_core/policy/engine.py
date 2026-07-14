@@ -3,7 +3,7 @@
 This module is the single source of truth for "can this user do this
 action on this project?" - all permission checks anywhere in z4j go
 through :class:`PolicyEngine`. It is deliberately pure (no I/O, no
-async) so it is trivial to unit-test against the full (action × role)
+async) so it is trivial to unit-test against the full (action x role)
 matrix.
 
 Role hierarchy (see ``docs/SECURITY.md §3.1``):
@@ -59,9 +59,9 @@ class Action(StrEnum):
     MANAGE_MEMBERS = "manage_members"
     UPDATE_PROJECT = "update_project"
     DELETE_PROJECT = "delete_project"
-    MINT_AGENT_TOKEN = "mint_agent_token"
-    REVOKE_AGENT_TOKEN = "revoke_agent_token"
-    ROTATE_PROJECT_SECRET = "rotate_project_secret"
+    MINT_AGENT_TOKEN = "mint_agent_token"  # noqa: S105  action name enum value, not a secret
+    REVOKE_AGENT_TOKEN = "revoke_agent_token"  # noqa: S105  action name enum value, not a secret
+    ROTATE_PROJECT_SECRET = "rotate_project_secret"  # noqa: S105  action name enum value, not a secret
     UPDATE_RETENTION = "update_retention"
 
 
@@ -152,12 +152,12 @@ class Decision:
     required_role: ProjectRole | None = None
 
     @classmethod
-    def allow(cls) -> "Decision":
+    def allow(cls) -> Decision:
         """Construct an allow decision."""
         return cls(allowed=True)
 
     @classmethod
-    def deny(cls, reason: str, required_role: ProjectRole | None = None) -> "Decision":
+    def deny(cls, reason: str, required_role: ProjectRole | None = None) -> Decision:
         """Construct a deny decision with a machine-readable reason."""
         return cls(allowed=False, reason=reason, required_role=required_role)
 

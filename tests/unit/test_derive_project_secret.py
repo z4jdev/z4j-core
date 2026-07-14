@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
 from z4j_core.transport.hmac import (
     _PROJECT_SECRET_DERIVATION_LABEL,
     derive_project_secret,
@@ -52,7 +51,7 @@ class TestDeriveProjectSecret:
         projects = [uuid.uuid4() for _ in range(5)]
         old_secrets = [derive_project_secret(old_master, p) for p in projects]
         new_secrets = [derive_project_secret(new_master, p) for p in projects]
-        for old, new in zip(old_secrets, new_secrets):
+        for old, new in zip(old_secrets, new_secrets, strict=True):
             assert old != new
 
     def test_short_master_raises(self) -> None:

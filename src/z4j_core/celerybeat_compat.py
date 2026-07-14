@@ -146,8 +146,13 @@ def _coerce_crontab_to_string(crontab: object) -> str:
     day_of_week = _crontab_field_to_str(getattr(crontab, "day_of_week", None))
     # Treat empty sets as wildcard (celery's default for unspecified fields)
     fields = [
-        f if f else "*" for f in (
-            minute, hour, day_of_month, month_of_year, day_of_week,
+        f if f else "*"
+        for f in (
+            minute,
+            hour,
+            day_of_month,
+            month_of_year,
+            day_of_week,
         )
     ]
     return " ".join(fields)
@@ -158,13 +163,15 @@ def _coerce_solar_to_string(solar: object) -> str:
     event = getattr(solar, "event", None)
     if not event:
         raise UnsupportedScheduleError(
-            "solar schedule missing event attribute", source=solar,
+            "solar schedule missing event attribute",
+            source=solar,
         )
     lat = getattr(solar, "lat", None) or getattr(solar, "latitude", None)
     lon = getattr(solar, "lon", None) or getattr(solar, "longitude", None)
     if lat is None or lon is None:
         raise UnsupportedScheduleError(
-            "solar schedule missing lat/lon attributes", source=solar,
+            "solar schedule missing lat/lon attributes",
+            source=solar,
         )
     return f"{event}:{lat}:{lon}"
 
@@ -196,8 +203,7 @@ def parse_celery_beat_schedule(schedule: object) -> tuple[str, str]:
         if 5 <= len(parts) <= 6:
             return ("cron", schedule.strip())
         raise UnsupportedScheduleError(
-            f"unrecognised schedule string: {schedule!r}; "
-            f"expected 5- or 6-field cron expression",
+            f"unrecognised schedule string: {schedule!r}; expected 5- or 6-field cron expression",
             source=schedule,
         )
 
@@ -295,7 +301,8 @@ def parse_celery_beat_entries(
         except UnsupportedScheduleError as exc:
             logger.warning(
                 "z4j celery-beat compat: entry %r unsupported: %s",
-                name, exc,
+                name,
+                exc,
             )
             continue
 

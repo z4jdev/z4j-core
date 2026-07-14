@@ -144,7 +144,7 @@ class Config(Z4JModel):
     )
 
     @model_validator(mode="after")
-    def _require_agent_id_for_longpoll(self) -> "Config":
+    def _require_agent_id_for_longpoll(self) -> Config:
         """Long-poll has no handshake frame, so the agent MUST know
         its own UUID up-front. Audit 2026-04-24 Medium-2: without this
         check the transport silently coerces an empty / malformed

@@ -37,19 +37,24 @@ DEFAULT_KEY_PATTERNS: tuple[str, ...] = (
     r"pwd",
     r"old_password",
     r"new_password",
-    # Secrets
+    # Secrets. The ``[_]?`` makes the separator optional so camelCase
+    # keys (``clientSecret``, ``hmacSecret``) are caught as well as
+    # snake_case -- key matching is fullmatch + IGNORECASE, so this
+    # covers both spellings without over-matching longer keys.
     r"secret",
     r"secrets",
-    r"client_secret",
-    r"webhook_secret",
-    # Tokens
+    r"client[_]?secret",
+    r"webhook[_]?secret",
+    r"hmac[_]?secret",
+    # Tokens. Underscore-optional catches accessToken / refreshToken /
+    # etc. that the snake_case-only patterns missed (audit M-4).
     r"token",
-    r"access_token",
-    r"refresh_token",
-    r"id_token",
-    r"api_token",
-    r"bearer_token",
-    r"session_token",
+    r"access[_]?token",
+    r"refresh[_]?token",
+    r"id[_]?token",
+    r"api[_]?token",
+    r"bearer[_]?token",
+    r"session[_]?token",
     # API keys
     r"api_?key",
     r"apikey",

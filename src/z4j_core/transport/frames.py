@@ -34,7 +34,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-
 #: Protocol version. v2 adds a per-frame HMAC envelope covering
 #: ``(v, type, id, ts, nonce, seq, agent_id, project_id, payload)``
 #: plus strict replay protection (``ReplayGuard``). v1 is not
@@ -79,7 +78,7 @@ class _SignedFrameBase(_FrameBase):
     # Tighten nonce cap.
     # ``make_nonce()`` returns ``secrets.token_urlsafe(16)`` = 22
     # chars; the prior 64-cap let a peer ship 64-byte nonces and
-    # bloat the OrderedDict's per-entry size 3×. 32 covers any
+    # bloat the OrderedDict's per-entry size 3x. 32 covers any
     # reasonable encoding of 16 random bytes.
     nonce: str = Field(default="", max_length=32)
     seq: int = Field(default=0, ge=0)
@@ -100,7 +99,7 @@ class HelloFrame(_FrameBase):
     """
 
     type: Literal["hello"] = "hello"
-    payload: "HelloPayload"
+    payload: HelloPayload
 
 
 class HelloPayload(BaseModel):
@@ -156,7 +155,7 @@ class HelloAckFrame(_FrameBase):
     """
 
     type: Literal["hello_ack"] = "hello_ack"
-    payload: "HelloAckPayload"
+    payload: HelloAckPayload
 
 
 class HelloAckPayload(BaseModel):
@@ -189,7 +188,7 @@ class EventBatchFrame(_SignedFrameBase):
     """
 
     type: Literal["event_batch"] = "event_batch"
-    payload: "EventBatchPayload"
+    payload: EventBatchPayload
 
 
 class EventBatchPayload(BaseModel):
@@ -203,7 +202,8 @@ class EventBatchPayload(BaseModel):
     # (500 is the agent's batcher ceiling) and far below the
     # pre-existing 1 MiB frame-bytes cap.
     events: list[dict[str, Any]] = Field(
-        default_factory=list, max_length=5000,
+        default_factory=list,
+        max_length=5000,
     )
 
 
@@ -211,7 +211,7 @@ class EventBatchAckFrame(_SignedFrameBase):
     """Ack for an ``event_batch`` - records how many events the brain took."""
 
     type: Literal["event_batch_ack"] = "event_batch_ack"
-    payload: "EventBatchAckPayload"
+    payload: EventBatchAckPayload
 
 
 class EventBatchAckPayload(BaseModel):
@@ -246,7 +246,7 @@ class HeartbeatFrame(_SignedFrameBase):
     """
 
     type: Literal["heartbeat"] = "heartbeat"
-    payload: "HeartbeatPayload"
+    payload: HeartbeatPayload
 
 
 class HeartbeatPayload(BaseModel):
@@ -278,7 +278,7 @@ class CommandFrame(_SignedFrameBase):
     """
 
     type: Literal["command"] = "command"
-    payload: "CommandPayload"
+    payload: CommandPayload
 
 
 class CommandPayload(BaseModel):
@@ -315,7 +315,7 @@ class CommandResultFrame(_SignedFrameBase):
     """
 
     type: Literal["command_result"] = "command_result"
-    payload: "CommandResultPayload"
+    payload: CommandResultPayload
 
 
 class CommandResultPayload(BaseModel):
@@ -338,7 +338,7 @@ class RegistryDeltaFrame(_SignedFrameBase):
     """Incremental update to the agent's known task registry."""
 
     type: Literal["registry_delta"] = "registry_delta"
-    payload: "RegistryDeltaPayload"
+    payload: RegistryDeltaPayload
 
 
 class RegistryDeltaPayload(BaseModel):
@@ -363,7 +363,7 @@ class ErrorFrame(_SignedFrameBase):
     """Non-fatal or fatal error report from one peer to the other."""
 
     type: Literal["error"] = "error"
-    payload: "ErrorPayload"
+    payload: ErrorPayload
 
 
 class ErrorPayload(BaseModel):
@@ -395,7 +395,7 @@ class AgentStatusFrame(_SignedFrameBase):
     """
 
     type: Literal["agent_status"] = "agent_status"
-    payload: "AgentStatusPayload"
+    payload: AgentStatusPayload
 
 
 class AgentStatusPayload(BaseModel):
@@ -416,7 +416,9 @@ class AgentStatusPayload(BaseModel):
     # How long the current session has been live. None when the
     # agent is in a backoff window between connects.
     current_session_age_seconds: float | None = Field(
-        default=None, ge=0.0, le=315_360_000.0,  # 10 years cap
+        default=None,
+        ge=0.0,
+        le=315_360_000.0,  # 10 years cap
     )
 
     # Local buffer state - depth and oldest entry age. Useful for
@@ -424,7 +426,9 @@ class AgentStatusPayload(BaseModel):
     # vs "agent fine, brain lagging."
     buffer_depth: int = Field(default=0, ge=0, le=10_000_000)
     buffer_oldest_age_seconds: float | None = Field(
-        default=None, ge=0.0, le=315_360_000.0,
+        default=None,
+        ge=0.0,
+        le=315_360_000.0,
     )
 
     # Version metadata. Surfaces in the dashboard so an operator
@@ -586,6 +590,10 @@ AgentStatusFrame.model_rebuild()
 
 
 __all__ = [
+    "FRAME_TYPES",
+    "PROTOCOL_VERSION",
+    "AgentStatusFrame",
+    "AgentStatusPayload",
     "CommandAckFrame",
     "CommandFrame",
     "CommandPayload",
@@ -593,13 +601,10 @@ __all__ = [
     "CommandResultPayload",
     "ErrorFrame",
     "ErrorPayload",
-    "AgentStatusFrame",
-    "AgentStatusPayload",
     "EventBatchAckFrame",
     "EventBatchAckPayload",
     "EventBatchFrame",
     "EventBatchPayload",
-    "FRAME_TYPES",
     "Frame",
     "HeartbeatFrame",
     "HeartbeatPayload",
@@ -607,7 +612,6 @@ __all__ = [
     "HelloAckPayload",
     "HelloFrame",
     "HelloPayload",
-    "PROTOCOL_VERSION",
     "RegistryDeltaFrame",
     "RegistryDeltaPayload",
     "canonical_json",

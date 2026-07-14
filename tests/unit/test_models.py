@@ -15,7 +15,6 @@ from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
-
 from z4j_core.models import (
     Agent,
     AgentState,

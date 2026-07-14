@@ -14,14 +14,12 @@ import datetime as dt
 from dataclasses import dataclass
 
 import pytest
-
 from z4j_core.celerybeat_compat import (
     ScheduleSpec,
     UnsupportedScheduleError,
     parse_celery_beat_entries,
     parse_celery_beat_schedule,
 )
-
 
 # ---------------------------------------------------------------------------
 # Stand-ins for celery types (no celery import needed)
@@ -268,7 +266,8 @@ class TestParseEntries:
         assert specs[0].name == "ok"
 
     def test_expires_warns_but_does_not_skip(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         entries = {
             "with-expires": {
@@ -280,10 +279,7 @@ class TestParseEntries:
         specs = parse_celery_beat_entries(entries)
         assert len(specs) == 1
         # warning logged
-        assert any(
-            "expires" in r.message and "with-expires" in r.message
-            for r in caplog.records
-        )
+        assert any("expires" in r.message and "with-expires" in r.message for r in caplog.records)
 
     def test_returns_schedule_spec_instances(self) -> None:
         entries = {

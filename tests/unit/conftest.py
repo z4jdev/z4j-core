@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-
 from z4j_core.models import (
     Agent,
     AgentState,

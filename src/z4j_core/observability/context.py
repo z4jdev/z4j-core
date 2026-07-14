@@ -29,8 +29,8 @@ from __future__ import annotations
 
 import contextvars
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 __all__ = [
     "ContextFilter",
@@ -50,19 +50,24 @@ __all__ = [
 # (rare) and sibling HTTP requests (common in the brain) get isolated
 # values without anyone passing context explicitly.
 agent_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "z4j_agent_id", default=None,
+    "z4j_agent_id",
+    default=None,
 )
 session_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "z4j_session_id", default=None,
+    "z4j_session_id",
+    default=None,
 )
 worker_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "z4j_worker_id", default=None,
+    "z4j_worker_id",
+    default=None,
 )
 project_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "z4j_project_id", default=None,
+    "z4j_project_id",
+    default=None,
 )
 request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "z4j_request_id", default=None,
+    "z4j_request_id",
+    default=None,
 )
 
 

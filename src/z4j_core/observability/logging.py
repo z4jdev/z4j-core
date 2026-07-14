@@ -48,12 +48,33 @@ LogFormat = Literal["text", "json"]
 # included in JSON output. The list comes from CPython's
 # logging.Logger.makeRecord docstring; we copy it verbatim because
 # the upstream attribute is not exported.
-_RESERVED_RECORD_FIELDS = frozenset({
-    "args", "asctime", "created", "exc_info", "exc_text", "filename",
-    "funcName", "levelname", "levelno", "lineno", "message", "module",
-    "msecs", "msg", "name", "pathname", "process", "processName",
-    "relativeCreated", "stack_info", "taskName", "thread", "threadName",
-})
+_RESERVED_RECORD_FIELDS = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
 
 
 # Substrings in field names that mark caller-supplied ``extra=`` values
@@ -103,8 +124,7 @@ def resolve_log_format(env: dict[str, str] | None = None) -> LogFormat:
     if raw in ("text", "json"):
         return raw  # type: ignore[return-value]
     sys.stderr.write(
-        f"z4j: unknown Z4J_LOG_FORMAT={raw!r}, falling back to 'text'. "
-        f"Valid values: text, json.\n",
+        f"z4j: unknown Z4J_LOG_FORMAT={raw!r}, falling back to 'text'. Valid values: text, json.\n",
     )
     return "text"
 
@@ -170,7 +190,9 @@ class JsonFormatter(logging.Formatter):
             # configs) treat the literal characters as record
             # boundaries and split one log entry into two.
             return json.dumps(
-                payload, default=_coerce_jsonable, ensure_ascii=True,
+                payload,
+                default=_coerce_jsonable,
+                ensure_ascii=True,
             )
         except (TypeError, ValueError):
             # Last resort: if a custom field defied coercion, drop it
@@ -225,11 +247,7 @@ def configure_stdlib_logging(
     if stream is None:
         stream = sys.stderr
 
-    formatter: logging.Formatter
-    if log_format == "json":
-        formatter = JsonFormatter()
-    else:
-        formatter = TextFormatter()
+    formatter: logging.Formatter = JsonFormatter() if log_format == "json" else TextFormatter()
 
     handler = logging.StreamHandler(stream)
     handler.setFormatter(formatter)
@@ -237,10 +255,7 @@ def configure_stdlib_logging(
     root = logging.getLogger()
     # Replace any prior z4j handler we installed but leave others
     # alone (the host app may have its own handlers we don't own).
-    root.handlers = [
-        h for h in root.handlers
-        if not getattr(h, "_z4j_managed", False)
-    ]
+    root.handlers = [h for h in root.handlers if not getattr(h, "_z4j_managed", False)]
     handler._z4j_managed = True  # type: ignore[attr-defined]
     root.addHandler(handler)
     root.setLevel(level)
@@ -250,6 +265,7 @@ def configure_stdlib_logging(
     # session_id, worker_id, project_id, request_id) propagate into
     # every log record via Phase G's binding helpers.
     from z4j_core.observability.context import install_context_filter
+
     install_context_filter()
 
 

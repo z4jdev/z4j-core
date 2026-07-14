@@ -39,6 +39,7 @@ by v2 parties. See ``docs/SECURITY.md §4.3`` and
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import secrets
@@ -148,6 +149,54 @@ def derive_project_secret(master_secret: bytes, project_id: UUID) -> bytes:
         _PROJECT_SECRET_DERIVATION_LABEL + project_id.bytes_le,
         hashlib.sha256,
     ).digest()
+
+
+#: The urlsafe-base64 alphabet plus padding, used to reject non-base64
+#: ``hmac_secret`` values before the lenient stdlib decoder silently
+#: mangles them.
+_B64_URLSAFE_ALPHABET: frozenset[str] = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=",
+)
+
+
+def decode_agent_hmac_secret(value: str) -> bytes:
+    """Decode a configured agent ``hmac_secret`` string into raw bytes.
+
+    The brain returns the per-project secret as
+    ``base64.urlsafe_b64encode(derive_project_secret(...))`` on agent
+    mint (``z4j_brain.api.agents.CreateAgentResponse.hmac_secret``); the
+    operator pastes it into ``Z4J_HMAC_SECRET``. Both frame signing and
+    the ``purge_queue`` confirm-token key on the RAW bytes, so every
+    consumer must decode the string identically -- this is the single
+    source of truth for that decode (``z4j_bare.runtime`` delegates
+    here). Padding is restored if the operator dropped the trailing
+    ``=`` for shell ergonomics.
+
+    Raises ``ValueError`` on an empty or undecodable value rather than
+    silently UTF-8 encoding, which would mismatch the brain's key and
+    surface as a confusing signature failure far from the cause.
+    """
+    candidate = value.strip()
+    if not candidate:
+        raise ValueError("hmac_secret is empty")
+    padded = candidate + "=" * (-len(candidate) % 4)
+    # Reject non-alphabet characters explicitly. ``urlsafe_b64decode``
+    # is lenient (it silently drops some invalid characters instead of
+    # raising), so garbage could otherwise decode to arbitrary bytes and
+    # surface as a signature mismatch far from the cause. The set check
+    # makes "not base64" a clear config error here.
+    if set(padded) - _B64_URLSAFE_ALPHABET:
+        raise ValueError(
+            "hmac_secret must be urlsafe-base64 (the value the brain "
+            "returns from POST /agents); got a non-base64 string",
+        )
+    try:
+        return base64.urlsafe_b64decode(padded)
+    except (ValueError, base64.binascii.Error) as exc:  # type: ignore[attr-defined]
+        raise ValueError(
+            "hmac_secret must be urlsafe-base64 (the value the brain "
+            "returns from POST /agents); got an undecodable string",
+        ) from exc
 
 
 def generate_project_secret() -> bytes:
@@ -260,10 +309,11 @@ def verify_envelope(
 
 
 __all__ = [
-    "HMACVerifier",
     "MAX_FRAME_TS_SKEW_SECONDS",
     "MAX_NONCE_TRACK_SECONDS",
     "MIN_SEQ",
+    "HMACVerifier",
+    "decode_agent_hmac_secret",
     "derive_project_secret",
     "envelope_bytes",
     "generate_project_secret",
