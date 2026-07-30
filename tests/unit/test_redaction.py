@@ -114,7 +114,7 @@ class TestTruncation:
         engine = RedactionEngine(RedactionConfig(max_value_bytes=100))
         huge = "a" * 500
         result = engine.scrub({"big": huge})
-        value = result["big"]  # type: ignore[index]
+        value = result["big"]
         assert isinstance(value, str)
         assert len(value.encode("utf-8")) < 500
         assert "[...400 more bytes truncated]" in value

@@ -67,7 +67,7 @@ def test_z4j_core_module_imports_are_clean(module_name: str) -> None:
     assert not forbidden_seen, (
         f"Importing {module_name} brought forbidden modules into sys.modules: "
         f"{forbidden_seen}. This is a core-purity violation. "
-        f"See docs/CLAUDE.md §2.1 and .importlinter."
+        f"See .importlinter for the enforced contracts."
     )
 
 

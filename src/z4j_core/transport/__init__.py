@@ -18,7 +18,9 @@ from __future__ import annotations
 
 from z4j_core.transport.frames import (
     FRAME_TYPES,
+    RETRY_BY_REFERENCE_CAPABILITY,
     CommandAckFrame,
+    CommandAckPayload,
     CommandFrame,
     CommandResultFrame,
     ErrorFrame,
@@ -49,8 +51,10 @@ __all__ = [
     "CURRENT_PROTOCOL",
     "FRAME_TYPES",
     "MIN_SUPPORTED_PROTOCOL",
+    "RETRY_BY_REFERENCE_CAPABILITY",
     "SUPPORTED_PROTOCOLS",
     "CommandAckFrame",
+    "CommandAckPayload",
     "CommandFrame",
     "CommandResultFrame",
     "ErrorFrame",

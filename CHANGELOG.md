@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0 (2026-07-23)
+
+* Added the versioned per-adapter retry-contract capability used to bind retry authority to an executing session rather than sticky agent metadata.
+* Hardened the predictable `/tmp` buffer fallback (CWE-377) and now create the z4j home tree `0700` so fresh installs stop warning about world-readable state.
+* Part of the coordinated 1.8.0 fleet release (unified fleet version, green lint/format/import-boundary gate).
+
 ## 1.7.0 (2026-07-11)
 
 * Purge confirmation tokens are now a keyed HMAC over the queue name and depth, derived from the project secret and verified server-side (the pre-1.7 unkeyed token is rejected by default; set `Z4J_ACCEPT_LEGACY_PURGE_TOKEN=1` on agents temporarily during a rolling upgrade from an older brain).

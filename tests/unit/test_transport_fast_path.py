@@ -5,8 +5,8 @@ replay-guard interaction, datetime coercion, and shape-sanity
 defences. The slow path (handshake frames) is also exercised so
 both paths produce equivalent typed frames.
 
-See ``RELEASE-1.5.1-LEAK-FIX-DESIGN.md`` for the design rationale
-and the empirical pass/fail thresholds these tests support.
+Pins the empirical pass/fail thresholds for the fast-path framing
+leak fix.
 """
 
 from __future__ import annotations
@@ -291,7 +291,7 @@ class TestDispatcherErrors:
         assert not isinstance(exc_info.value, ProtocolVersionError)
 
     def test_unknown_type_at_wrong_version_is_a_version_error(self) -> None:
-        # R9: a frame carrying a NEW type introduced by a version bump must
+        # A frame carrying a NEW type introduced by a version bump must
         # surface as ProtocolVersionError (retry -> lands on an upgraded
         # replica), not an unknown-type ProtocolError that gets drop-acked.
         # The version gate runs BEFORE the type dispatch.

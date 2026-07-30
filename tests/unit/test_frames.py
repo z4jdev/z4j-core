@@ -122,6 +122,22 @@ class TestCommandFrame:
         reparsed = parse_frame(raw)
         assert isinstance(reparsed, CommandFrame)
         assert reparsed.hmac == "deadbeef" * 8
+        assert reparsed.payload.delivery_claim_token is None
+
+    def test_command_delivery_claim_token_round_trips(self) -> None:
+        token = "11111111-1111-4111-8111-111111111111"
+        frame = CommandFrame(
+            id="cmd_1",
+            payload=CommandPayload(
+                action="schedule.fire",
+                delivery_claim_token=token,
+            ),
+        )
+
+        reparsed = parse_frame(serialize_frame(frame))
+
+        assert isinstance(reparsed, CommandFrame)
+        assert reparsed.payload.delivery_claim_token == token
 
 
 class TestEventBatchFrame:

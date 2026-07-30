@@ -36,6 +36,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as _dt
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 logger = logging.getLogger("z4j.core.celerybeat_compat")
@@ -244,7 +245,7 @@ def parse_celery_beat_schedule(schedule: object) -> tuple[str, str]:
 
 
 def parse_celery_beat_entries(
-    entries: dict[str, dict[str, Any]],
+    entries: Mapping[str, object],
 ) -> list[ScheduleSpec]:
     """Translate a full ``CELERY_BEAT_SCHEDULE`` dict into z4j ScheduleSpecs.
 

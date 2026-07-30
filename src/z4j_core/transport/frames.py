@@ -40,6 +40,10 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 #: supported on the wire any more - see ``docs/SECURITY.md §4.3``.
 PROTOCOL_VERSION: int = 2
 
+#: Boundary A (1.8.0): versioned per-adapter capability proving that the
+#: loaded queue adapter implements the safe by-reference retry contract.
+RETRY_BY_REFERENCE_CAPABILITY = "retry_by_reference_v1"
+
 
 class _FrameBase(BaseModel):
     """Shared config for every wire frame.
@@ -145,6 +149,17 @@ class HelloPayload(BaseModel):
     worker_pid: int | None = Field(default=None, ge=0, le=2**31 - 1)
     worker_started_at: datetime | None = None
 
+    # Runtime-wide feature flags are additive observability only. Boundary A
+    # deliberately does not use this sticky per-Agent value for retry authority:
+    # the versioned ``retry_by_reference_v1`` marker lives inside the loaded
+    # adapter's entry in ``capabilities`` and the brain binds that map to one
+    # immutable WebSocket session generation (or one long-poll request).
+    # Known flags:
+    #   "retry_by_reference" -- this runtime implements the 1.7.1 safe retry
+    #       contract: it never replays the brain's redacted args snapshot, and a
+    #       polyfill retry fails closed unless the operator supplies both halves.
+    runtime_features: list[str] = Field(default_factory=list, max_length=64)
+
 
 class HelloAckFrame(_FrameBase):
     """Brain's response to a successful ``hello``.
@@ -196,7 +211,7 @@ class EventBatchPayload(BaseModel):
 
     # Hard cap on the ``events`` list. The WS gateway's bytes
     # cap and the
-    # frame-router's iteration cap (R7) are both downstream of
+    # frame-router's iteration cap are both downstream of
     # Pydantic parse time, without this, the validator walks an
     # unbounded list before either kicks in. 5000 is generous
     # (500 is the agent's batcher ceiling) and far below the
@@ -294,6 +309,18 @@ class CommandPayload(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=60, ge=1, le=3600)
     issued_by: str | None = Field(default=None, max_length=64)
+    # Private Boundary-D delivery correlation.  It is part of the signed
+    # command envelope, never task parameters, and current agents echo it in
+    # both ACK and result.  Older agents ignore this additive field.
+    delivery_claim_token: str | None = Field(default=None, max_length=64)
+
+
+class CommandAckPayload(BaseModel):
+    """First-stage receipt metadata for a command delivery."""
+
+    model_config = ConfigDict(strict=True, extra="ignore")
+
+    delivery_claim_token: str | None = Field(default=None, max_length=64)
 
 
 class CommandAckFrame(_SignedFrameBase):
@@ -304,7 +331,7 @@ class CommandAckFrame(_SignedFrameBase):
     """
 
     type: Literal["command_ack"] = "command_ack"
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: CommandAckPayload = Field(default_factory=CommandAckPayload)
 
 
 class CommandResultFrame(_SignedFrameBase):
@@ -327,6 +354,7 @@ class CommandResultPayload(BaseModel):
     # in the audit log + dashboard; cap to keep a hostile or buggy
     # adapter from inflating either by emitting a 100MB traceback.
     error: str | None = Field(default=None, max_length=8192)
+    delivery_claim_token: str | None = Field(default=None, max_length=64)
 
 
 # ---------------------------------------------------------------------------
@@ -582,6 +610,7 @@ EventBatchFrame.model_rebuild()
 EventBatchAckFrame.model_rebuild()
 HeartbeatFrame.model_rebuild()
 CommandFrame.model_rebuild()
+CommandAckPayload.model_rebuild()
 CommandAckFrame.model_rebuild()
 CommandResultFrame.model_rebuild()
 RegistryDeltaFrame.model_rebuild()
@@ -595,6 +624,7 @@ __all__ = [
     "AgentStatusFrame",
     "AgentStatusPayload",
     "CommandAckFrame",
+    "CommandAckPayload",
     "CommandFrame",
     "CommandPayload",
     "CommandResultFrame",

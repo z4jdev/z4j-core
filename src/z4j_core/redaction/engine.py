@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any, overload
 
 from z4j_core.errors import RedactionConfigError
 from z4j_core.redaction.markers import (
@@ -119,6 +120,12 @@ class RedactionEngine:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    @overload
+    def scrub(self, data: dict[Any, Any]) -> dict[str, object]: ...
+
+    @overload
+    def scrub(self, data: object) -> object: ...
 
     def scrub(self, data: object) -> object:
         """Return a scrubbed copy of ``data``.

@@ -4,8 +4,7 @@ The redaction engine runs inside the agent at event-capture time,
 before any event ever leaves the host process. The brain re-applies
 it as defense in depth before persisting events.
 
-See ``docs/SECURITY.md §5`` for the full specification and
-``docs/CLAUDE.md §2.3`` for the non-negotiable rules.
+See ``docs/SECURITY.md §5`` for the full specification.
 """
 
 from __future__ import annotations

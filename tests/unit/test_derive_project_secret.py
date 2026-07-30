@@ -1,9 +1,8 @@
 """Tests for :func:`z4j_core.transport.hmac.derive_project_secret`.
 
-Closes the test gap flagged by R4 agent 2: verify derivation is
+Closes the test gap flagged by agent 2: verify derivation is
 deterministic, domain-separated by project_id, and fails-fast on a
-too-short master secret.
-"""
+too-short master secret."""
 
 from __future__ import annotations
 
@@ -42,7 +41,7 @@ class TestDeriveProjectSecret:
         assert a != b
 
     def test_rotating_master_rotates_every_project(self) -> None:
-        """R4 finding: rotating Z4J_SECRET rotates EVERY project's
+        """Finding: rotating Z4J_SECRET rotates EVERY project's
         derived secret atomically. This is the intended behaviour -
         operators must re-enrol agents. Test documents it so a
         future refactor can't silently weaken the guarantee."""

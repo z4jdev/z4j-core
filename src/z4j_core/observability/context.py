@@ -89,7 +89,7 @@ _VAR_TO_RECORD_FIELD: dict[contextvars.ContextVar[str | None], str] = {
 _MAX_ID_LEN = 64
 
 
-def _sanitize_id(value: str | None) -> str | None:
+def _sanitize_id(value: object) -> str | None:
     """Reject control characters and trim length on a context id value.
 
     Phase G binds identity values that originated from the brain's

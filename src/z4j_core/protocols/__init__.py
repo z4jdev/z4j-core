@@ -19,8 +19,7 @@ These three axes are orthogonal - any framework can be combined with
 any engine with any scheduler. Adapter packages implement one Protocol
 each, and the brain does not need to know which ones exist.
 
-See ``docs/ARCHITECTURE.md §4`` for the full design and
-``docs/CLAUDE.md §2.1`` for the modularity rules.
+See ``docs/ARCHITECTURE.md §4`` for the full design.
 """
 
 from __future__ import annotations

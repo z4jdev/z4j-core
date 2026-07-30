@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from z4j_core.errors import ProtocolError, ProtocolVersionError
 from z4j_core.transport.frames import (
@@ -56,13 +58,12 @@ from z4j_core.transport.replay import ReplayGuard
 #                                  string -> datetime coercion after
 #                                  model_construct
 #
-# See RELEASE-1.5.1-LEAK-FIX-DESIGN.md sections 4-7.
 # ---------------------------------------------------------------------------
 
 
 def _build_signed_frame_tables() -> tuple[
-    dict[str, type],
-    dict[str, type],
+    dict[str, type[_SignedFrameBase]],
+    dict[str, type[BaseModel]],
     dict[str, frozenset[str]],
 ]:
     from z4j_core.transport.frames import (
@@ -85,7 +86,7 @@ def _build_signed_frame_tables() -> tuple[
         RegistryDeltaPayload,
     )
 
-    frame_by_type: dict[str, type] = {
+    frame_by_type: dict[str, type[_SignedFrameBase]] = {
         "event_batch": EventBatchFrame,
         "event_batch_ack": EventBatchAckFrame,
         "heartbeat": HeartbeatFrame,
@@ -100,7 +101,7 @@ def _build_signed_frame_tables() -> tuple[
     # absent: its payload is a plain ``dict[str, Any]`` (frames.py
     # line 307), not a typed model, so the fast path passes the raw
     # dict through unchanged.
-    payload_by_type: dict[str, type] = {
+    payload_by_type: dict[str, type[BaseModel]] = {
         "event_batch": EventBatchPayload,
         "event_batch_ack": EventBatchAckPayload,
         "heartbeat": HeartbeatPayload,
@@ -224,7 +225,7 @@ class FrameSigner:
         # HMAC verify, not just at the per-instance nonce window.
         envelope["session_id"] = self._session_id
         frame.hmac = sign_envelope(self._secret, envelope)
-        return serialize_frame(frame)
+        return serialize_frame(cast(Frame, frame))
 
 
 class FrameVerifier:
@@ -286,7 +287,6 @@ class FrameVerifier:
           come from our agent code, so validation is redundant
           defense-in-depth -- the leak shape under sustained burst
           load made it operationally expensive.
-          See RELEASE-1.5.1-LEAK-FIX-DESIGN.md.
 
         Both paths share identical security semantics: HMAC FIRST
         (so an attacker without the signature cannot probe replay
@@ -314,7 +314,7 @@ class FrameVerifier:
         # the version bump also introduced a new frame TYPE this peer does
         # not know: without this, that frame surfaces as an unknown-type
         # ProtocolError and is drop-acked, losing a frame an upgraded replica
-        # would store (R9). ONLY an INT ``v`` that differs is a recoverable
+        # would store. ONLY an INT ``v`` that differs is a recoverable
         # skew; a wrong-TYPE ``v`` (string / bool / float) is MALFORMED
         # content -- a plain ProtocolError so it is drop-acked, not retried
         # forever as if a version bump would fix it (round-8 external
@@ -386,8 +386,7 @@ class FrameVerifier:
         Saves ~22 retained Pydantic-validator objects per frame vs the
         slow path (Wave A tracemalloc baseline). Under sustained
         100+ t/s burst this is the dominant leak source addressed by
-        this commit. See RELEASE-1.5.1-LEAK-FIX-DESIGN.md sections
-        3-5 for the empirical justification.
+        this commit.
 
         Security invariants are identical to the slow path:
         - HMAC over the canonical envelope MUST verify before any
@@ -481,7 +480,7 @@ class FrameVerifier:
             constructed_payload = payload_cls.model_construct(**payload_dict)
 
         frame_kwargs["payload"] = constructed_payload
-        return frame_cls.model_construct(**frame_kwargs)
+        return cast(Frame, frame_cls.model_construct(**frame_kwargs))
 
 
 __all__ = [

@@ -30,7 +30,7 @@ import logging
 import os
 import sys
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, TextIO
 
 __all__ = [
     "JsonFormatter",
@@ -219,11 +219,17 @@ class TextFormatter(logging.Formatter):
         )
 
 
+class _ManagedStreamHandler(logging.StreamHandler[TextIO]):
+    """Marker subclass so z4j can replace only the handlers it owns."""
+
+    _z4j_managed = True
+
+
 def configure_stdlib_logging(
     *,
     level: str = "INFO",
     log_format: LogFormat | None = None,
-    stream: object = None,
+    stream: TextIO | None = None,
 ) -> None:
     """Install a stdlib root handler honoring ``Z4J_LOG_FORMAT``.
 
@@ -249,14 +255,21 @@ def configure_stdlib_logging(
 
     formatter: logging.Formatter = JsonFormatter() if log_format == "json" else TextFormatter()
 
-    handler = logging.StreamHandler(stream)
+    handler = _ManagedStreamHandler(stream)
     handler.setFormatter(formatter)
+
+    from z4j_core.observability.context import ContextFilter, install_context_filter
+
+    # Logger filters are not inherited: attaching a ContextFilter only
+    # to the root logger does not process records emitted by descendant
+    # ``z4j.*`` loggers. Put the filter on our handler as well, because
+    # every propagated record is processed there before formatting.
+    handler.addFilter(ContextFilter())
 
     root = logging.getLogger()
     # Replace any prior z4j handler we installed but leave others
     # alone (the host app may have its own handlers we don't own).
     root.handlers = [h for h in root.handlers if not getattr(h, "_z4j_managed", False)]
-    handler._z4j_managed = True  # type: ignore[attr-defined]
     root.addHandler(handler)
     root.setLevel(level)
     logging.getLogger("z4j").setLevel(level)
@@ -264,8 +277,6 @@ def configure_stdlib_logging(
     # Install the context filter on the root so contextvars (agent_id,
     # session_id, worker_id, project_id, request_id) propagate into
     # every log record via Phase G's binding helpers.
-    from z4j_core.observability.context import install_context_filter
-
     install_context_filter()
 
 

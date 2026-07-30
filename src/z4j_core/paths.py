@@ -18,7 +18,6 @@ references are forbidden.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import re
 import tempfile
@@ -109,7 +108,14 @@ def buffer_root() -> Path:
     """
     primary = z4j_home()
     try:
-        primary.mkdir(parents=True, exist_ok=True)
+        # mode applies only at CREATE time (existing dirs keep their
+        # operator-set bits), matching ensure_z4j_home(). Without it a
+        # fresh install whose first touch was buffer_root() -- the
+        # agent's usual path -- created ~/.z4j as umask-default 0755
+        # and every agent start warned about the loose mode z4j itself
+        # had produced. The buffer DB under here holds task/event
+        # payload bytes (potentially PII).
+        primary.mkdir(mode=0o700, parents=True, exist_ok=True)
         # Probe writability with an actual create+delete; checking
         # mode bits alone gives wrong answers on filesystems with
         # ACLs that override POSIX bits.
@@ -135,10 +141,49 @@ def buffer_root() -> Path:
         sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", raw)[:32] or "default"
         uid = sanitized
     fallback = Path(tempfile.gettempdir()) / f"z4j-{uid}"
-    fallback.mkdir(parents=True, exist_ok=True)
-    with contextlib.suppress(OSError):
-        fallback.chmod(0o700)
-    return fallback.resolve()
+    if os.name != "posix":
+        # Windows temp dirs don't have the POSIX predictable-name /
+        # ownership attack surface this guards against.
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback.resolve()
+    # B16 (CWE-377): the basename ``z4j-<uid>`` is PREDICTABLE, so on a
+    # multi-tenant host a local attacker can pre-create it as their own
+    # (loose-perm or a symlink). ``mkdir(exist_ok=True)`` would then adopt
+    # it and ``chmod`` would EPERM-and-suppress, leaving z4j writing a
+    # buffer DB of (potentially PII) task/event payloads into an
+    # attacker-controlled directory. Create it privately + owned; if a
+    # pre-existing entry is not a private dir WE own, refuse it and use a
+    # fresh unguessable per-process dir instead (mkdtemp is 0700 + owned).
+    try:
+        fallback.mkdir(mode=0o700, exist_ok=False)
+        return fallback.resolve()
+    except FileExistsError:
+        if _is_own_private_dir(fallback):
+            return fallback.resolve()
+    except OSError:
+        pass
+    safe = Path(tempfile.mkdtemp(prefix=f"z4j-{uid}-"))
+    return safe.resolve()
+
+
+def _is_own_private_dir(path: Path) -> bool:
+    """True iff ``path`` is a real directory owned by us with mode 0o700.
+
+    Uses ``lstat`` so a symlink planted at the predictable name fails the
+    ``S_ISDIR`` check (it is not itself a directory) rather than being
+    followed to an attacker target.
+    """
+    import stat as _stat
+
+    try:
+        st = path.lstat()
+    except OSError:
+        return False
+    if not _stat.S_ISDIR(st.st_mode):
+        return False
+    if st.st_uid != os.getuid():
+        return False
+    return not (st.st_mode & 0o077)
 
 
 def reject_deprecated_path_env() -> None:

@@ -11,6 +11,7 @@ Focus on the boundary behavior that matters in production:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -91,7 +92,7 @@ class TestProject:
 
     def test_is_frozen(self, project: Project) -> None:
         with pytest.raises(ValidationError):
-            project.slug = "other"  # type: ignore[misc]
+            project.slug = "other"
 
     def test_retention_days_bounded(self) -> None:
         with pytest.raises(ValidationError):
@@ -158,7 +159,7 @@ class TestUser:
         with pytest.raises(ValidationError):
             User(
                 id=UUID("00000000-0000-4000-8000-000000000001"),
-                email="not-an-email",  # type: ignore[arg-type]
+                email="not-an-email",
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
             )
@@ -200,7 +201,7 @@ class TestSchedule:
     def _now(self) -> datetime:
         return datetime(2026, 4, 27, 12, 0, 0, tzinfo=UTC)
 
-    def _base_kwargs(self) -> dict:
+    def _base_kwargs(self) -> dict[str, Any]:
         now = self._now()
         return {
             "id": UUID("00000000-0000-4000-8000-000000000001"),
@@ -239,7 +240,9 @@ class TestSchedule:
         # CatchUpPolicy is a StrEnum - unknown strings must fail.
         # This guards against typos in declarative reconcilers.
         with pytest.raises(ValidationError):
-            Schedule(**self._base_kwargs(), catch_up="fire_some_missed")
+            Schedule.model_validate(
+                {**self._base_kwargs(), "catch_up": "fire_some_missed"},
+            )
 
     def test_source_max_length_enforced(self) -> None:
         with pytest.raises(ValidationError):
@@ -252,7 +255,9 @@ class TestSchedule:
     def test_unknown_field_still_rejected(self) -> None:
         # Adding the new fields must not regress extra="forbid".
         with pytest.raises(ValidationError):
-            Schedule(**self._base_kwargs(), totally_made_up=True)
+            Schedule.model_validate(
+                {**self._base_kwargs(), "totally_made_up": True},
+            )
 
 
 class TestEnums:

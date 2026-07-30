@@ -9,8 +9,7 @@ module (Django, Celery, Flask, FastAPI, Redis, SQLAlchemy, websockets,
 httpx, ...). Only Pydantic and the Python standard library. This is
 enforced by ``import-linter`` on every PR.
 
-See ``docs/ARCHITECTURE.md`` for the full architecture and
-``docs/CLAUDE.md §2.1`` for the modularity rules.
+See ``docs/ARCHITECTURE.md`` for the full architecture.
 
 Licensed under Apache License 2.0. See the repository ``LICENSE-APACHE``.
 """
