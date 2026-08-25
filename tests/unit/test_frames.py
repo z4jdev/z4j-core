@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pytest
 from pydantic import ValidationError
 from z4j_core.errors import ProtocolError
@@ -17,6 +19,8 @@ from z4j_core.transport import (
 from z4j_core.transport.frames import (
     CommandFrame,
     CommandPayload,
+    CommandResultFrame,
+    CommandResultPayload,
     EventBatchFrame,
     EventBatchPayload,
     HeartbeatFrame,
@@ -138,6 +142,30 @@ class TestCommandFrame:
 
         assert isinstance(reparsed, CommandFrame)
         assert reparsed.payload.delivery_claim_token == token
+
+
+class TestCommandResultFrame:
+    """Protocol v2 carries agent outcomes, not brain-owned timeout state."""
+
+    @pytest.mark.parametrize("status", ["success", "failed"])
+    def test_protocol_v2_terminal_statuses_remain_compatible(
+        self,
+        status: Literal["success", "failed"],
+    ) -> None:
+        frame = CommandResultFrame(
+            id="cmd_1",
+            payload=CommandResultPayload(status=status),
+        )
+
+        reparsed = parse_frame(serialize_frame(frame))
+
+        assert isinstance(reparsed, CommandResultFrame)
+        assert reparsed.v == 2
+        assert reparsed.payload.status == status
+
+    def test_timeout_is_rejected_by_typed_wire_model(self) -> None:
+        with pytest.raises(ValidationError):
+            CommandResultPayload.model_validate({"status": "timeout"})
 
 
 class TestEventBatchFrame:

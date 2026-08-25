@@ -21,10 +21,10 @@ class ProjectRole(StrEnum):
     """Role a user holds within a specific project.
 
     - ``viewer`` - read-only access to all project data.
-    - ``operator`` - viewer plus the ability to issue commands
-      (retry, cancel, bulk retry, schedule CRUD).
-    - ``admin`` - operator plus the ability to manage memberships,
-      retention, rate limits, and agent tokens.
+    - ``operator`` - viewer plus the ability to issue commands and control
+      existing schedules (enable, disable, trigger, pause, resume).
+    - ``admin`` - operator plus schedule-definition CRUD and the ability to
+      manage memberships, retention, rate limits, and agent tokens.
     """
 
     VIEWER = "viewer"

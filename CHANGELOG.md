@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.0 (2026-08-25)
+
+* Added `AgentIncompatibleError` and widened the audit model so a 1.9 agent and a 1.9 brain agree on what an incompatible peer is.
+* Tightened a queue-engine protocol signature.
+* Authenticated command results accept only `success` or `failed`; `timeout`
+  remains brain-owned, including the signed-frame fast path.
+
 ## 1.8.0 (2026-07-23)
 
 * Added the versioned per-adapter retry-contract capability used to bind retry authority to an executing session rather than sticky agent metadata.

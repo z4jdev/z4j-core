@@ -2,8 +2,9 @@
 
 These are the built-in patterns every :class:`RedactionEngine` starts
 with unless ``default_patterns_enabled`` is explicitly set to False.
-Users can add extra patterns via configuration (see ``docs/ADAPTER.md §8.1``),
-but cannot remove entries from these lists.
+Users can add extra patterns via configuration (see ``docs/ADAPTER.md §8.1``).
+Individual built-ins cannot be subtracted, but configuration can explicitly
+disable the complete default set.
 
 All patterns are case-insensitive. Key patterns match against dict
 keys; when a key matches, the whole value is replaced regardless of
@@ -123,7 +124,16 @@ DEFAULT_VALUE_PATTERNS: tuple[str, ...] = (
     # Email addresses - redacted by default since they are PII for
     # most Python apps. Users who need to see them can use
     # ``keep_kwargs=["email"]`` on specific tasks.
-    r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}",
+    #
+    # The leading lookbehind is load-bearing for SPEED, not for matching. An
+    # email cannot begin mid-token, so it changes no result; what it changes is
+    # the cost of failing. Without it the engine retried the ``+`` from every
+    # position in the string, each attempt scanning to the end before failing
+    # on the missing ``@``, which is quadratic: a 64 KB task argument with no
+    # ``@`` in it took 14 seconds to reject, inside the user's own worker.
+    # With it, a position whose predecessor is already in the class cannot
+    # start a match, so the same payload rejects in about a millisecond.
+    r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}",
     # US SSN (XXX-XX-XXXX)
     r"\b\d{3}-\d{2}-\d{4}\b",
 )

@@ -2,8 +2,11 @@
 
 Every message the agent and brain exchange is a single JSON object
 with a mandatory ``v`` (protocol version), ``type`` (discriminator),
-and ``id`` (ULID-ish string used by the peer to ack). The specific
-``payload`` shape depends on the frame type.
+and ``id`` (a bounded caller-generated correlation identifier). An
+``event_batch_ack`` refers to the original batch ID explicitly; other
+frame IDs support correlation and diagnostics rather than a universal
+acknowledgement mechanism. The specific ``payload`` shape depends on
+the frame type.
 
 **Protocol v2 (April 2026)**: every stateful frame in BOTH
 directions carries an ``hmac`` over a canonical envelope that
@@ -346,6 +349,8 @@ class CommandResultFrame(_SignedFrameBase):
 
 
 class CommandResultPayload(BaseModel):
+    """Authenticated agent result; timeout remains a brain-side timer state."""
+
     model_config = ConfigDict(strict=True, extra="ignore")
 
     status: Literal["success", "failed"]
@@ -413,9 +418,10 @@ class AgentStatusFrame(_SignedFrameBase):
     Emitted alongside the heartbeat (default 10s cadence). Carries
     per-error-class consecutive failure counts, last-success
     timestamp, current session age, buffer depth, and version
-    metadata. The brain persists each frame to ``agent_status_history``
-    so the dashboard can render a per-agent flap timeline without
-    parsing logs.
+    metadata. The brain attempts to persist eligible frames to
+    ``agent_status_history`` so the dashboard can render a per-agent flap
+    timeline without parsing logs; rate limiting or a persistence failure may
+    drop this best-effort observability data.
 
     Signed in v2 because it influences operator-facing health and
     automated alerting; an unsigned variant could be forged by a

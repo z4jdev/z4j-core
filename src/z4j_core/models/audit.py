@@ -1,11 +1,21 @@
 """Audit-log domain model.
 
-Append-only. Every security-relevant action - command dispatched,
-user logged in, token rotated, membership changed - creates exactly
-one :class:`AuditEntry`. The Postgres ``audit_log`` table refuses
-UPDATE and DELETE at the trigger level (see ``docs/DATABASE.md §3.11``)
-and a dedicated privileged retention process is the only thing that
-may remove old rows.
+An :class:`AuditEntry` represents one stored audit record. The brain's
+mutating workflows write audit rows transactionally where their
+contract requires it; some denial and security breadcrumbs are
+best-effort, and an infrastructure failure can prevent such a record.
+The model itself does not assert complete one-for-one coverage of every
+security-relevant action. The Postgres
+``audit_log`` table refuses UPDATE at the trigger level and admits a
+DELETE only from a statement that names a recognised transition
+(retention and generation reset), which is what keeps an ordinary
+application code path, a downgraded adapter, or a hand-run statement
+from quietly editing the trail. See ``docs/DATABASE.md §3.11``.
+
+That session setting selects a code path, it does not identify a
+caller, and any client holding write access to the table can set it
+for itself. The trail's evidence value therefore ends at the database
+boundary; see the threat model in ``docs/SECURITY.md``.
 """
 
 from __future__ import annotations
@@ -21,7 +31,9 @@ from z4j_core.models._base import Z4JModel
 
 
 class AuditEntry(Z4JModel):
-    """A single immutable audit-log entry.
+    """A single audit-log entry. Frozen once constructed, like every
+    model here; see the module docstring for what the stored row's
+    append-only property does and does not cover.
 
     Attributes:
         id: Opaque UUID.

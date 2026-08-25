@@ -7,6 +7,7 @@ falls back to an unguessable ``mkdtemp`` dir instead.
 from __future__ import annotations
 
 import os
+import stat
 import tempfile
 from pathlib import Path
 
@@ -26,6 +27,8 @@ def test_own_private_dir_accepted(tmp_path: Path) -> None:
 def test_group_or_other_accessible_dir_refused(tmp_path: Path) -> None:
     d = tmp_path / "loose"
     d.mkdir(mode=0o755)
+    d.chmod(0o755)
+    assert stat.S_IMODE(d.lstat().st_mode) == 0o755
     assert _is_own_private_dir(d) is False
 
 

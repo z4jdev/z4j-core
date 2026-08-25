@@ -49,15 +49,15 @@ def _default_buffer_path() -> Path:
 class Config(Z4JModel):
     """Resolved agent configuration.
 
-    Built by the :class:`z4j_core.protocols.FrameworkAdapter.discover_config`
-    method from a combination of environment variables, the framework's
-    own settings mechanism, and sensible defaults. The agent core
+    Built by the unified config resolver from explicit installer arguments,
+    environment variables, framework settings, and defaults. The agent core
     validates this once at startup and then the runtime is immutable.
 
     Attributes:
         brain_url: HTTPS URL of the brain the agent should connect to.
-        token: Project-scoped bearer token, kept as a ``SecretStr`` so
-               it never ends up in logs or tracebacks.
+        token: Project-scoped bearer token. ``SecretStr`` redacts its normal
+               representation; code that explicitly extracts the value must
+               still avoid logging it.
         project_id: Project slug the token is scoped to.
         agent_name: Optional human-readable label for THIS agent
                     instance. Surfaces in the dashboard's agent list
@@ -66,9 +66,14 @@ class Config(Z4JModel):
                     the token was minted; this overrides it for display
                     purposes (useful when one token is shared across
                     multiple workers and you want per-host labels).
-        environment: Free-form environment label attached to every event.
-        tags: Per-deployment tags echoed on every event.
-        transport: ``"auto"``, ``"ws"``, or ``"longpoll"``.
+        environment: Reserved free-form deployment label available to
+                     adapters. The current runtime does not inject it
+                     into every event automatically.
+        tags: Reserved per-deployment metadata available to adapters.
+              The current runtime does not inject it automatically.
+        transport: ``"auto"``, ``"ws"``, or ``"longpoll"``. ``"auto"``
+                   currently selects WebSocket exactly like ``"ws"``;
+                   select ``"longpoll"`` explicitly when needed.
         engines: Names of the engine adapters the runtime should register.
         schedulers: Names of the scheduler adapters to register.
         heartbeat_seconds: How often the agent sends a heartbeat.
@@ -76,22 +81,23 @@ class Config(Z4JModel):
         buffer_max_events: Upper bound on buffered events.
         buffer_max_bytes: Upper bound on buffer file size in bytes.
         max_payload_bytes: Per-field truncation limit.
-        dev_mode: Enables the filesystem watcher and other dev-only hooks.
+        dev_mode: Allows an explicitly configured plaintext transport for
+                  local development. It does not disable frame signing.
         log_level: Local agent log level.
         autostart: If False, the runtime is created but not started -
                    useful for test environments.
-        strict_mode: If True, startup fails fast on any config problem.
-                     Default False so the agent never crashes the host
-                     app in production.
+        strict_mode: Compatibility field retained for adapter configuration.
+                     The current runtime does not branch on it; configuration
+                     validation remains fail-fast.
         redaction_extra_key_patterns: Additional key-name regex patterns.
         redaction_extra_value_patterns: Additional value regex patterns.
         redaction_defaults_enabled: If False, the built-in patterns are
                                     skipped. Intentional footgun - only
                                     set this if you know what you are doing.
-        hmac_secret: Shared secret used to verify command signatures from
-                     the brain. Required when ``dev_mode`` is False - the
-                     runtime refuses to start without it. Kept as a
-                     ``SecretStr`` so it never lands in logs.
+        hmac_secret: Shared secret used to sign and verify protocol frames.
+                     The runtime always refuses to start without it,
+                     including in ``dev_mode``. Kept as a ``SecretStr``
+                     so its representation is redacted.
     """
 
     brain_url: AnyHttpUrl

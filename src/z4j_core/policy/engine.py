@@ -1,10 +1,11 @@
-"""Policy engine - authorization decisions for z4j.
+"""Library-side helpers for project-role authorization decisions.
 
-This module is the single source of truth for "can this user do this
-action on this project?" - all permission checks anywhere in z4j go
-through :class:`PolicyEngine`. It is deliberately pure (no I/O, no
-async) so it is trivial to unit-test against the full (action x role)
-matrix.
+This module exposes a pure (no I/O, no async) policy engine for
+``z4j-core`` consumers. It is not the brain server's authorization
+engine; the brain has a separate persistence-aware policy module.
+Permission checks made through this library API use
+:class:`PolicyEngine` and can be unit-tested against the full
+(action x role) matrix.
 
 Role hierarchy (see ``docs/SECURITY.md §3.1``):
 

@@ -18,12 +18,11 @@ Precedence (highest to lowest):
    collision because flat values are typically operator overrides).
 4. :class:`Config` code defaults.
 
-``Z4J_DEV_MODE`` policy: untrusted env vars cannot disable HMAC
-verification. The env-var setting is warn-and-ignored. Explicit
-operator code (kwargs OR framework settings) honors ``dev_mode``
-because writing it in source is a deliberate choice the operator
-takes responsibility for. This policy was previously enforced only
-by ``z4j-bare``; 1.5 makes it uniform across every adapter.
+``Z4J_DEV_MODE`` policy: this resolver warns and ignores the env-var value so
+an inherited process environment cannot opt the agent transport into plaintext.
+Explicit operator code (kwargs or framework settings) honors ``dev_mode``.
+Adapter-local development tooling may inspect its own environment separately;
+frame HMAC remains required in either mode.
 
 Empty-string env values are treated as "not set" so a shell-level
 ``Z4J_TOKEN=`` does not silently zero out a value provided in
@@ -97,12 +96,12 @@ _LIST_ENV_VARS: dict[str, str] = {
 
 
 _DEV_MODE_ENV_WARNING = (
-    "Z4J_DEV_MODE env var is IGNORED for security reasons. A "
-    "'dev mode' bypass disables HMAC verification on the wire, "
-    "allowing any client with the project's bearer token to submit "
-    "forged frames - untrusted env vars cannot be permitted to "
-    "disable HMAC. If you really want dev_mode in a non-production "
-    "environment, set it in your framework's settings (Django "
+    "Z4J_DEV_MODE env var is IGNORED for security reasons: the agent Config "
+    "resolver does not allow an inherited process environment to opt the "
+    "transport into plaintext. dev_mode permits "
+    "an explicitly configured plaintext transport on a trusted local network; "
+    "it does not disable frame HMAC. To opt in, set it in your framework's "
+    "settings (Django "
     "settings.Z4J, Flask app.config, FastAPI install_z4j kwargs, "
     "bare install_agent kwargs) - that's an explicit operator code "
     "choice. Z4J_DEV_MODE from environment is dropped."

@@ -9,13 +9,15 @@ The lifecycle is:
 
 1. User clicks a button in the dashboard (or calls the REST API).
 2. The brain creates a ``Command`` row with ``status=pending``.
-3. The brain dispatches the command over the WebSocket to the target agent.
+3. The brain offers the command to the target agent through its selected
+   transport.
 4. The agent executes it via the appropriate adapter and returns a
    :class:`CommandResult`.
 5. The brain updates the ``Command`` row to ``status=completed`` (or
    ``failed``, ``timeout``).
 
-Every command execution is written to the audit log. See
+Command issuance and terminal outcomes are represented in the brain's
+audit workflows. See
 ``docs/API.md §3.5`` for the REST API shape and
 ``docs/ARCHITECTURE.md §6`` for the end-to-end lifecycle.
 """
@@ -56,9 +58,14 @@ class CommandStatus(StrEnum):
 class CommandResult(Z4JModel):
     """The outcome of executing a command on the agent side.
 
-    Returned by every method on :class:`z4j_core.protocols.QueueEngineAdapter`
-    and :class:`z4j_core.protocols.SchedulerAdapter` that performs an
-    action. Also the shape carried in the ``command_result`` wire frame.
+    Returned by queue and scheduler action methods whose protocol
+    signature uses :class:`CommandResult`. Also the shape carried in
+    the ``command_result`` wire frame.
+
+    This is an agent-produced result, so its status is deliberately limited to
+    ``success`` or ``failed``. ``CommandStatus.TIMEOUT`` is brain-owned state:
+    the timeout worker applies it only when no authenticated result arrived by
+    ``timeout_at``. It is not a third agent/wire result status.
 
     Attributes:
         status: ``"success"`` or ``"failed"``.
@@ -81,8 +88,9 @@ class Command(Z4JModel):
         project_id: Project this command is scoped to.
         issued_by: User who issued the command. None for
                    system-initiated commands.
-        agent_id: Target agent, if already chosen. None until
-                  dispatch.
+        agent_id: Target agent, when the command has one. Some command
+                  paths choose it before persistence; other workflows
+                  may leave it unset until later.
         action: Action name - e.g. ``retry_task``, ``cancel_task``,
                 ``bulk_retry``, ``purge_queue``, ``restart_worker``,
                 ``schedule.enable``, ``schedule.trigger_now``.

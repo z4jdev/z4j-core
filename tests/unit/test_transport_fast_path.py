@@ -13,20 +13,30 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast, get_args
 from uuid import uuid4
 
 import pytest
+from pydantic import BaseModel
 from z4j_core.errors import ProtocolError, SignatureError
+from z4j_core.transport import framing as framing_module
 from z4j_core.transport.frames import (
+    CommandAckFrame,
+    CommandAckPayload,
+    CommandResultFrame,
+    CommandResultPayload,
     EventBatchFrame,
     EventBatchPayload,
+    Frame,
     HeartbeatFrame,
     HeartbeatPayload,
     HelloFrame,
     HelloPayload,
+    parse_frame,
     serialize_frame,
 )
 from z4j_core.transport.framing import FrameSigner, FrameVerifier
+from z4j_core.transport.hmac import sign_envelope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,6 +77,120 @@ def _build_event_batch(n_events: int = 3) -> EventBatchFrame:
             ],
         ),
     )
+
+
+def _signed_command_ack_wire(
+    payload: dict[str, object],
+) -> tuple[bytes, FrameVerifier]:
+    """Build a real signed ACK wire while retaining additive payload fields."""
+    secret = b"a" * 32
+    agent_id = str(uuid4())
+    project_id = str(uuid4())
+    session_id = str(uuid4())
+    signer = FrameSigner(
+        secret=secret,
+        agent_id=agent_id,
+        project_id=project_id,
+        session_id=session_id,
+    )
+    verifier = FrameVerifier(
+        secret=secret,
+        agent_id=agent_id,
+        project_id=project_id,
+        session_id=session_id,
+    )
+    wire = signer.sign_and_serialize(
+        CommandAckFrame(id=str(uuid4()), payload=CommandAckPayload()),
+    )
+    raw = json.loads(wire)
+    raw["payload"] = payload
+    envelope = {
+        **raw,
+        "agent_id": agent_id,
+        "project_id": project_id,
+        "session_id": session_id,
+    }
+    raw["hmac"] = sign_envelope(secret, envelope)
+    return json.dumps(raw).encode(), verifier
+
+
+def _signed_command_result_wire(
+    status: str,
+    *,
+    resign: bool,
+) -> tuple[bytes, FrameVerifier]:
+    """Build a result wire that can exercise values Pydantic rejects."""
+    secret = b"r" * 32
+    agent_id = str(uuid4())
+    project_id = str(uuid4())
+    session_id = str(uuid4())
+    signer = FrameSigner(
+        secret=secret,
+        agent_id=agent_id,
+        project_id=project_id,
+        session_id=session_id,
+    )
+    verifier = FrameVerifier(
+        secret=secret,
+        agent_id=agent_id,
+        project_id=project_id,
+        session_id=session_id,
+    )
+    wire = signer.sign_and_serialize(
+        CommandResultFrame(
+            id=str(uuid4()),
+            payload=CommandResultPayload(status="success"),
+        ),
+    )
+    raw = json.loads(wire)
+    raw["payload"]["status"] = status
+    if resign:
+        envelope = {
+            **raw,
+            "agent_id": agent_id,
+            "project_id": project_id,
+            "session_id": session_id,
+        }
+        raw["hmac"] = sign_envelope(secret, envelope)
+    return json.dumps(raw).encode(), verifier
+
+
+# ---------------------------------------------------------------------------
+# Registry alignment: the fast-path tables must cover the wire-model union
+# ---------------------------------------------------------------------------
+
+
+class TestFastPathTableAlignment:
+    def test_signed_frame_and_payload_tables_match_frame_union(self) -> None:
+        expected_frames: dict[str, type[BaseModel]] = {}
+        expected_payloads: dict[str, type[BaseModel]] = {}
+        expected_datetime_fields: dict[str, frozenset[str]] = {}
+
+        frame_union = get_args(Frame)[0]
+        for frame_cls in get_args(frame_union):
+            if "hmac" not in frame_cls.model_fields:
+                continue
+
+            frame_type = frame_cls.model_fields["type"].default
+            payload_cls = frame_cls.model_fields["payload"].annotation
+            assert isinstance(frame_type, str)
+            assert isinstance(payload_cls, type)
+            assert issubclass(payload_cls, BaseModel)
+
+            expected_frames[frame_type] = frame_cls
+            expected_payloads[frame_type] = payload_cls
+
+            datetime_fields = frozenset(
+                field_name
+                for field_name, field in payload_cls.model_fields.items()
+                if field.annotation is datetime or datetime in get_args(field.annotation)
+            )
+            if datetime_fields:
+                expected_datetime_fields[frame_type] = datetime_fields
+
+        assert expected_frames == framing_module._SIGNED_FRAME_CLASS_BY_TYPE
+        assert expected_payloads == framing_module._SIGNED_PAYLOAD_CLASS_BY_TYPE
+        assert expected_datetime_fields == framing_module._DATETIME_PAYLOAD_FIELDS
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +253,64 @@ class TestRoundTrip:
         assert isinstance(parsed, EventBatchFrame)
         assert parsed.payload.events == []
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {},
+            {"delivery_claim_token": "11111111-1111-4111-8111-111111111111"},
+            {
+                "delivery_claim_token": "22222222-2222-4222-8222-222222222222",
+                "future_additive_field": "ignored",
+            },
+        ],
+    )
+    def test_command_ack_fast_path_matches_typed_slow_path(
+        self,
+        payload: dict[str, object],
+    ) -> None:
+        wire, verifier = _signed_command_ack_wire(payload)
+
+        parsed_fast = verifier.parse_and_verify(wire)
+        parsed_slow = parse_frame(wire)
+
+        assert isinstance(parsed_fast, CommandAckFrame)
+        assert isinstance(parsed_fast.payload, CommandAckPayload)
+        assert isinstance(parsed_slow, CommandAckFrame)
+        assert parsed_fast.payload.model_dump() == parsed_slow.payload.model_dump()
+
+    def test_missing_command_ack_mapping_reproduces_router_attribute_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        wire, verifier = _signed_command_ack_wire(
+            {"delivery_claim_token": "33333333-3333-4333-8333-333333333333"},
+        )
+        monkeypatch.delitem(
+            framing_module._SIGNED_PAYLOAD_CLASS_BY_TYPE,
+            "command_ack",
+        )
+
+        parsed = verifier.parse_and_verify(wire)
+
+        assert isinstance(parsed, CommandAckFrame)
+        untyped_payload = cast(Any, parsed.payload)
+        assert isinstance(untyped_payload, dict)
+        attribute_name = "delivery_claim_token"
+        with pytest.raises(AttributeError, match="delivery_claim_token"):
+            getattr(untyped_payload, attribute_name)
+
+    @pytest.mark.parametrize("status", ["success", "failed"])
+    def test_command_result_statuses_remain_fast_path_compatible(
+        self,
+        status: str,
+    ) -> None:
+        wire, verifier = _signed_command_result_wire(status, resign=True)
+
+        parsed = verifier.parse_and_verify(wire)
+
+        assert isinstance(parsed, CommandResultFrame)
+        assert parsed.payload.status == status
+
 
 # ---------------------------------------------------------------------------
 # Security: HMAC verify, replay guard, session binding
@@ -136,6 +318,27 @@ class TestRoundTrip:
 
 
 class TestSecurityInvariants:
+    def test_authenticated_timeout_result_is_rejected_without_consuming_replay_state(
+        self,
+    ) -> None:
+        wire, verifier = _signed_command_result_wire("timeout", resign=True)
+
+        # Semantic validation runs after HMAC but before the replay guard. A
+        # rejected control frame therefore cannot mutate replay/application
+        # state; the same bytes fail for the same fixed semantic reason again.
+        for _ in range(2):
+            with pytest.raises(
+                ProtocolError,
+                match="status must be 'success' or 'failed'",
+            ):
+                verifier.parse_and_verify(wire)
+
+    def test_command_result_hmac_is_checked_before_timeout_semantics(self) -> None:
+        wire, verifier = _signed_command_result_wire("timeout", resign=False)
+
+        with pytest.raises(SignatureError):
+            verifier.parse_and_verify(wire)
+
     def test_tampered_payload_rejected(self) -> None:
         signer, verifier = _signer_verifier_pair()
         frame = _build_event_batch()

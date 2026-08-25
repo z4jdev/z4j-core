@@ -1,9 +1,10 @@
 """Agent domain model.
 
 An ``Agent`` represents one z4j agent runtime that has (or has ever)
-connected to this brain. Each agent is project-scoped, authenticates
-with a project-scoped bearer token, and advertises its capabilities
-on connect via the ``hello`` wire frame.
+connected to this brain. Each agent is project-scoped and authenticates
+with a project-scoped bearer token. WebSocket agents advertise runtime
+details in ``hello``. Long-poll agents use authenticated requests and
+do not perform that handshake.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from z4j_core.models._base import Z4JModel
 class AgentState(StrEnum):
     """Runtime state of an agent as tracked by the brain.
 
-    - ``online`` - WebSocket connection is active and heartbeats are
+    - ``online`` - the selected transport is active and heartbeats are
       current.
     - ``offline`` - no heartbeat within the project's offline timeout
       (default 30 seconds).
@@ -35,12 +36,11 @@ class AgentState(StrEnum):
 
 
 class AgentCapabilities(Z4JModel):
-    """Capabilities an agent advertises on connect.
+    """Capabilities grouped by queue and scheduler adapter.
 
-    Shipped as part of the ``hello`` frame. The brain uses this to
-    enable/disable UI actions per agent - for example, the "Restart
-    worker" button is only shown when the agent's Celery adapter
-    declares the ``restart_worker`` capability.
+    This domain representation is convenient for API consumers. The
+    wire ``hello`` payload uses one adapter-name mapping alongside its
+    separate engine and scheduler name lists.
 
     Attributes:
         engines: Map of engine name to the set of capability tokens
@@ -81,7 +81,8 @@ class Agent(Z4JModel):
         state: Last-known runtime state.
         last_seen_at: Timestamp of the most recent heartbeat.
         last_connect_at: Timestamp of the most recent successful
-                         WebSocket connect.
+                         WebSocket handshake. Long-poll liveness is
+                         reflected through ``last_seen_at`` instead.
         metadata: Free-form map of host info - Python version, PID,
                   hostname, etc. Not used for access decisions.
         created_at: When the agent record was created in the brain.

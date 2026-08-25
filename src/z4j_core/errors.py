@@ -1,9 +1,9 @@
-"""Exception hierarchy for z4j-core and its consumers.
+"""Shared exception vocabulary for z4j-core and its consumers.
 
-Every exception raised by z4j - in the core, the brain, or any
-adapter - inherits from :class:`Z4JError`. The error middleware in the
-brain maps these to HTTP status codes; adapter code wraps lower-level
-exceptions with these before they cross package boundaries.
+Public boundaries use :class:`Z4JError` subclasses for conditions that
+need stable machine-readable codes. Internal code and third-party
+libraries can still raise ordinary Python exceptions. The brain maps
+the shared exceptions it exposes to HTTP status codes.
 
 See ``docs/patterns.md §4`` for error-handling conventions.
 """
@@ -14,7 +14,7 @@ from typing import Any
 
 
 class Z4JError(Exception):
-    """Base for every exception raised anywhere in z4j.
+    """Base for z4j's shared, machine-readable exception types.
 
     Attributes:
         code: Short machine-readable error code, e.g. ``"not_found"``.
@@ -117,15 +117,46 @@ class RateLimitExceeded(Z4JError):  # noqa: N818  public exported API name, rena
 
 
 class ProtocolError(Z4JError):
-    """The agent and brain speak incompatible protocol versions.
+    """The agent and brain cannot continue with the received protocol data.
 
-    Raised during the ``hello`` handshake in the brain when the
-    agent's advertised ``protocol_version`` is outside the supported
-    range.
+    This includes incompatible versions discovered during the ``hello``
+    handshake and protocol-level failures reported after connection.
     """
 
     code = "protocol_incompatible"
     http_status = 426
+
+
+class AgentIncompatibleError(ProtocolError):
+    """This agent build is one the brain will not accept, and time will not fix it.
+
+    A subclass of :class:`ProtocolError` so existing ``except ProtocolError``
+    sites still catch it, but distinguishable so a supervisor can pick a
+    schedule that matches the remedy. An unsupported wire protocol or an agent
+    outside the brain's supported version range is resolved by a human
+    upgrading something, not by reconnecting: retrying on the transient
+    schedule turns a version mismatch into a permanent reconnect storm against
+    a brain that has already said no.
+
+    Deliberately NOT fatal. The agent runs inside somebody's application, so
+    stopping it for good would mean an operator who fixes the brain gets no
+    agent back until they restart their app. A long backoff both stops the
+    storm and lets a corrected deployment recover on its own.
+    """
+
+    # No ``code`` of its own, on purpose: this inherits ProtocolError's
+    # ``protocol_incompatible``.
+    #
+    # ``code`` is the published, stable identifier (see Z4JError above and
+    # ``docs/API.md §1.Errors``), and what this class describes IS a protocol
+    # incompatibility. The subclass exists so a supervisor can select a backoff
+    # schedule by exception TYPE; it is not a second name for the condition.
+    # Minting a fresh code here would change the string consumers branch on
+    # while every ``except ProtocolError`` kept matching, so neither side would
+    # notice the break -- which is exactly how it would reach users.
+    #
+    # A genuinely new condition may of course have a new code. Renaming an
+    # existing one may not.
 
 
 class ProtocolVersionError(ProtocolError):
@@ -184,10 +215,12 @@ class AdapterError(Z4JError):
 
 
 class AgentOfflineError(Z4JError):
-    """The target agent is not currently connected to the brain.
+    """The target agent is revoked, unavailable, or has no delivery path.
 
-    Commands cannot be dispatched to offline agents. The brain returns
-    503 with this error code.
+    The brain maps this error to HTTP 503. Some issue paths persist a
+    pending command before discovering that no registry worker can
+    deliver it, so this exception does not imply that no command row
+    was created.
     """
 
     code = "agent_offline"
@@ -210,8 +243,8 @@ class ConfigError(Z4JError):
     """A configuration value is missing or invalid.
 
     Raised at startup when required environment variables or settings
-    entries cannot be parsed. Causes the process to exit with a clear
-    error message.
+    entries cannot be parsed. Startup entry points normally surface it
+    as a configuration failure; library callers may catch it.
     """
 
     code = "config_error"
@@ -247,6 +280,7 @@ class BufferStorageError(ConfigError):
 
 __all__ = [
     "AdapterError",
+    "AgentIncompatibleError",
     "AgentOfflineError",
     "AuthenticationError",
     "AuthorizationError",

@@ -1,8 +1,8 @@
 """The :class:`FrameworkAdapter` Protocol.
 
-One implementation per host web framework. v1 ships ``z4j-django``
-(the primary target) and the ``bare`` adapter that lives in
-``z4j-bare``. v1.1 adds ``z4j-flask`` and ``z4j-fastapi``.
+One implementation per host web framework. The distribution includes
+``z4j-django``, ``z4j-flask``, ``z4j-fastapi``, and the framework-free
+adapter in ``z4j-bare``.
 
 A framework adapter's job is narrow:
 
@@ -11,7 +11,7 @@ A framework adapter's job is narrow:
    names to try importing)
 3. Expose the current request context if there is one
 4. Hook the agent's lifecycle into the framework's startup/shutdown
-5. Optionally register an admin-UI embed (Django only in v1)
+5. Provide an optional extension point for an embedded admin view
 
 Framework adapters do NOT know about queue engines. They do NOT know
 about schedulers. They only know about the host framework.
@@ -44,17 +44,18 @@ class FrameworkAdapter(Protocol):
     def discover_config(self) -> Config:
         """Build the agent configuration from the framework's settings.
 
-        Implementations should combine:
+        Implementations expose their framework-native source to the unified
+        resolver, whose precedence is:
 
-        1. Environment variables (highest priority)
-        2. The framework's native settings mechanism (``settings.Z4J``
-           for Django, ``app.config["Z4J"]`` for Flask, the
-           ``install_agent`` kwargs for FastAPI)
-        3. Sensible defaults (lowest priority)
+        1. Explicit installer arguments (highest priority)
+        2. Environment variables
+        3. Framework settings (``settings.Z4J`` for Django or
+           ``app.config["Z4J"]`` for Flask)
+        4. Defaults (lowest priority)
 
-        Startup should fail fast on any missing required value - see
-        :class:`z4j_core.errors.ConfigError`. The agent core's strict
-        mode determines whether the failure is fatal to the host app.
+        Missing required values raise :class:`z4j_core.errors.ConfigError`.
+        ``strict_mode`` is retained for configuration compatibility; the
+        current resolver does not use it to make validation errors non-fatal.
         """
         ...
 
@@ -76,10 +77,10 @@ class FrameworkAdapter(Protocol):
     def current_context(self) -> RequestContext | None:
         """Return the current request context, if any.
 
-        Called by the agent core when capturing an event, so the event
-        can be enriched with user/tenant/trace IDs. Returns None when
-        the current execution context is not a request (e.g. inside a
-        Celery worker, or at module import time).
+        Available to framework integrations that enrich an event with
+        user/tenant/trace IDs. The bare agent runtime does not inject this
+        context automatically. Returns None when the current execution context
+        is not a request (e.g. inside a worker or at module import time).
 
         Implementations must never raise - return None on any error.
         """
@@ -102,18 +103,16 @@ class FrameworkAdapter(Protocol):
     def on_startup(self, hook: Callable[[], None]) -> None:
         """Register a callback to be invoked on framework startup.
 
-        The agent core uses this to start its background threads
-        and open the transport. Implementations must run the hook
-        after the framework's own initialization has completed.
+        Framework integrations use this to start the agent after their own
+        initialization has completed.
         """
         ...
 
     def on_shutdown(self, hook: Callable[[], None]) -> None:
         """Register a callback to be invoked on framework shutdown.
 
-        The agent core uses this to flush the buffer and close the
-        transport. Implementations must run the hook before the
-        framework's workers stop accepting new work.
+        Framework integrations use this to stop the agent before their workers
+        finish shutting down.
         """
         ...
 
@@ -124,8 +123,8 @@ class FrameworkAdapter(Protocol):
     def register_admin_view(self, view: Any) -> None:
         """Mount a read-only z4j panel inside the framework's admin UI.
 
-        Implemented only for Django in v1 (as an optional embed at
-        ``/admin/z4j/``). Other adapters should provide a no-op.
+        Optional extension point. Adapters without an embedded admin panel,
+        including the current built-in adapters, provide a no-op.
         """
         ...
 

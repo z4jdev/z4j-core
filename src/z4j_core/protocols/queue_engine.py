@@ -1,8 +1,7 @@
 """The :class:`QueueEngineAdapter` Protocol.
 
-One implementation per queue engine. v1 ships ``z4j-celery``; v2 adds
-``z4j-rq`` and ``z4j-dramatiq``; v3 adds ``z4j-taskiq``, ``z4j-arq``,
-``z4j-huey``, ``z4j-saq``, and ``z4j-procrastinate``.
+One implementation per queue engine. Shipping adapters include Celery, RQ,
+Dramatiq, taskiq, arq, and Huey.
 
 An adapter is a plain Python class that satisfies this Protocol via
 structural typing - no inheritance, no ABC. See
@@ -157,12 +156,14 @@ class QueueEngineAdapter(Protocol):
     ) -> CommandResult:
         """Enqueue a fresh task by name + args.
 
-        This is the universal lowest-common-denominator action.
-        Every task queue can enqueue a task by name + args - that's
-        what makes them task queues. Brain-side polyfills for
-        ``retry``, ``bulk_retry``, and ``requeue_dead_letter`` are
-        all built on top of this method, eliminating per-engine
-        capability gating in the dashboard.
+        This is the lowest-common-denominator enqueue action. The agent
+        dispatcher may lower a missing native ``retry_task`` through this
+        method only when the command supplies both explicit ``override_args``
+        and ``override_kwargs``. Bulk retry and dead-letter operations are
+        still capability-gated native adapter actions.
+
+        ``eta`` is an absolute POSIX timestamp, not a relative delay. Public
+        APIs that accept a countdown must resolve it before calling an adapter.
 
         Returns ``CommandResult.result["task_id"]`` with the new
         task's engine-native id on success.
@@ -185,8 +186,8 @@ class QueueEngineAdapter(Protocol):
         """Re-enqueue a task, optionally with overridden args/kwargs.
 
         If ``override_args`` or ``override_kwargs`` is None the original
-        values are used. If ``eta`` is provided, the retry is scheduled
-        for that future time.
+        values are used. If ``eta`` is provided, it is the absolute POSIX
+        timestamp at which the retry should become eligible.
 
         Returns a :class:`CommandResult` with the new task ID on
         success, or an error message on failure.
@@ -227,7 +228,7 @@ class QueueEngineAdapter(Protocol):
     ) -> CommandResult:
         """Remove all tasks from a queue.
 
-        This is destructive and irreversible. Audit H13 requires the
+        This is destructive and irreversible. Implementations require the
         brain to include a ``confirm_token = HMAC(queue_name,
         current_depth)`` that the adapter re-derives locally and
         rejects on mismatch; ``force=True`` bypasses both that check
@@ -277,15 +278,13 @@ class QueueEngineAdapter(Protocol):
         - ``submit_task`` - :meth:`submit_task` is implemented (the
           universal primitive; should be present on every adapter
           shipping in v1.0+)
-        - ``retry_task`` - :meth:`retry_task` is implemented natively;
-          when absent, the brain polyfills via ``submit_task``
+        - ``retry_task`` - :meth:`retry_task` is implemented natively; when
+          absent, the agent can lower a retry through ``submit_task`` only
+          with complete explicit argument overrides
         - ``cancel_task`` - :meth:`cancel_task` is implemented
-        - ``bulk_retry`` - native bulk implementation; when absent,
-          brain loops ``submit_task`` from the stored task table
-        - ``purge_queue`` - native purge; when absent, brain loops
-          ``cancel_task`` over pending rows
-        - ``requeue_dead_letter`` - :meth:`requeue_dead_letter` is
-          implemented natively; when absent, brain polyfills
+        - ``bulk_retry`` - native bulk implementation
+        - ``purge_queue`` - native purge implementation
+        - ``requeue_dead_letter`` - native dead-letter requeue implementation
         - ``restart_worker`` - :meth:`restart_worker` is implemented
           (only celery has the remote control to do this)
         - ``rate_limit`` - native broker-side rate limit (celery only)

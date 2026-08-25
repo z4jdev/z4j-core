@@ -20,6 +20,7 @@ from z4j_core.models import (
     Agent,
     AgentState,
     CatchUpPolicy,
+    CommandResult,
     Project,
     ProjectRole,
     Schedule,
@@ -183,6 +184,18 @@ class TestAgent:
             updated_at=now,
         )
         assert a.state == AgentState.UNKNOWN
+
+
+class TestCommandResult:
+    """Agent outcomes must not impersonate brain deadline state."""
+
+    @pytest.mark.parametrize("status", ["success", "failed"])
+    def test_agent_terminal_statuses_remain_valid(self, status: str) -> None:
+        assert CommandResult(status=status).status == status
+
+    def test_timeout_is_not_an_agent_result_status(self) -> None:
+        with pytest.raises(ValidationError):
+            CommandResult(status="timeout")
 
 
 class TestSchedule:

@@ -1,7 +1,7 @@
 """The :class:`SchedulerAdapter` Protocol.
 
-One implementation per scheduler. v1 ships ``z4j-celerybeat``; v2 adds
-``z4j-apscheduler`` and a crontab reader.
+One implementation per scheduler. Shipping adapter packages cover celery-beat,
+APScheduler, RQ Scheduler, arq cron, Huey periodic tasks, and taskiq scheduler.
 
 Scheduler adapters are a separate axis from queue-engine adapters
 because scheduling and execution are not always the same component.

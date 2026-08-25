@@ -28,4 +28,7 @@ __all__ = [
     "REDACTED_TRUNCATED",
     "RedactionConfig",
     "RedactionEngine",
+    "redact_url_password",
 ]
+
+from z4j_core.redaction.urls import redact_url_password

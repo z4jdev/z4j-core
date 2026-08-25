@@ -11,8 +11,7 @@ Usage::
     # safe == {"user_id": 42, "password": "[REDACTED]"}
 
 The engine is pure and has no dependencies beyond stdlib and its own
-package. It is exercised by the z4j-core unit tests at 100 %
-line + branch coverage.
+package.
 """
 
 from __future__ import annotations

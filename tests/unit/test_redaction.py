@@ -75,12 +75,14 @@ class TestKeyRedaction:
 class TestValuePatterns:
     """Value patterns redact strings that look like secrets anywhere."""
 
-    def test_redacts_credit_card_like_value(self, engine: RedactionEngine) -> None:
+    def test_preserves_credit_card_like_value_without_sensitive_key(
+        self,
+        engine: RedactionEngine,
+    ) -> None:
         result = engine.scrub({"note": "charged 4111 1111 1111 1111 today"})
-        # A 16-digit number doesn't strictly match the default patterns
-        # (those require exact key or exact format), but an email does.
-        # Use email as the canonical example instead.
-        _ = result
+        # The default policy does not classify a card-like number by value.
+        # It is redacted only when it appears behind a configured sensitive key.
+        assert result == {"note": "charged 4111 1111 1111 1111 today"}
 
     def test_redacts_email_in_value(self, engine: RedactionEngine) -> None:
         result = engine.scrub({"note": "Contact alice@example.com"})

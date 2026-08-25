@@ -1,8 +1,8 @@
 # z4j-core
 
-[![PyPI version](https://img.shields.io/pypi/v/z4j-core.svg?v=1.8.0)](https://pypi.org/project/z4j-core/)
-[![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg?v=1.8.0)](https://pypi.org/project/z4j-core/)
-[![License](https://img.shields.io/pypi/l/z4j-core.svg?v=1.8.0)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/z4j-core.svg)](https://pypi.org/project/z4j-core/)
+[![Python](https://img.shields.io/pypi/pyversions/z4j-core.svg)](https://pypi.org/project/z4j-core/)
+[![License](https://img.shields.io/pypi/l/z4j-core.svg)](https://github.com/z4jdev/z4j-core/blob/main/LICENSE)
 
 The z4j domain core, shared models, protocols, transport, redaction, policy.
 
@@ -27,10 +27,11 @@ Full per-adapter matrix at <https://z4j.dev/reference/compatibility/>.
   implements one or more of these.
 - **Wire protocol**, frame definitions and the HMAC envelope used
   by z4j ↔ agent WebSocket transport (signed v2 protocol)
-- **Redaction engine**, strips secrets from logged event payloads
-  (URLs, headers, kwargs, exceptions) before they hit the brain
-- **Policy types**, role-based action enums (Viewer / Operator /
-  Admin), used by the brain's RBAC layer
+- **Redaction engine**, scrubs values that match the built-in or
+  operator-configured patterns from event payloads (URLs, headers, kwargs,
+  exceptions) before they hit the brain
+- **Policy helpers**, role-based action enums and a pure policy engine for
+  direct consumers. The brain enforces its API RBAC in its own domain layer.
 - **Error hierarchy**, shared exception classes so agents and brain
   agree on what counts as `AuthorizationError` vs `NotFoundError`
   vs `ConflictError`
@@ -47,9 +48,12 @@ against the protocols.
 
 ## Stability
 
-The wire protocol is `v=2` and additive within the 1.x major.
-Adapter protocols (`QueueEngineAdapter`, etc.) are stable contracts
-within the 1.x major; new optional methods may be added.
+The wire protocol is `v=2`; its frame models ignore additive fields.
+Product-version skew is narrower than the wire format alone, so upgrade
+the active z4j packages together according to the
+[compatibility policy](https://z4j.dev/reference/versioning/). Adapter
+interfaces are structural Python protocols; adding a method can therefore
+require coordinated adapter updates even when the wire format is unchanged.
 
 ## Documentation
 

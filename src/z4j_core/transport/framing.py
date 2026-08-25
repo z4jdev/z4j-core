@@ -70,6 +70,7 @@ def _build_signed_frame_tables() -> tuple[
         AgentStatusFrame,
         AgentStatusPayload,
         CommandAckFrame,
+        CommandAckPayload,
         CommandFrame,
         CommandPayload,
         CommandResultFrame,
@@ -97,15 +98,15 @@ def _build_signed_frame_tables() -> tuple[
         "error": ErrorFrame,
         "agent_status": AgentStatusFrame,
     }
-    # Payload class per frame type. ``command_ack`` is intentionally
-    # absent: its payload is a plain ``dict[str, Any]`` (frames.py
-    # line 307), not a typed model, so the fast path passes the raw
-    # dict through unchanged.
+    # Payload class per signed frame type. Every current signed frame
+    # declares a typed Pydantic payload; the fast path must construct that
+    # nested model explicitly because ``model_construct`` does not recurse.
     payload_by_type: dict[str, type[BaseModel]] = {
         "event_batch": EventBatchPayload,
         "event_batch_ack": EventBatchAckPayload,
         "heartbeat": HeartbeatPayload,
         "command": CommandPayload,
+        "command_ack": CommandAckPayload,
         "command_result": CommandResultPayload,
         "registry_delta": RegistryDeltaPayload,
         "error": ErrorPayload,
@@ -150,6 +151,31 @@ def _coerce_iso_datetime(value: Any) -> Any:
         except ValueError:
             return value
     return value
+
+
+_AGENT_COMMAND_RESULT_STATUSES = frozenset({"success", "failed"})
+
+
+def _validate_authenticated_payload_semantics(
+    frame_type: str,
+    payload: dict[str, Any] | None,
+) -> None:
+    """Pin security-relevant Literals skipped by the signed-frame fast path.
+
+    Full Pydantic parsing limits an agent ``command_result`` to ``success`` or
+    ``failed``.  The fast path intentionally uses ``model_construct`` after
+    HMAC authentication, which otherwise bypasses that Literal and would let a
+    compromised or buggy agent inject brain-owned ``timeout`` state.  Keep this
+    check after HMAC verification (so unsigned input cannot probe semantics)
+    but before replay or application state is mutated.
+    """
+    if frame_type != "command_result":
+        return
+    status = payload.get("status") if payload is not None else None
+    if type(status) is not str or status not in _AGENT_COMMAND_RESULT_STATUSES:
+        raise ProtocolError(
+            "command_result payload status must be 'success' or 'failed'",
+        )
 
 
 class FrameSigner:
@@ -396,15 +422,17 @@ class FrameVerifier:
         - Frame type must be in the signed allow-list.
 
         Bypassed (intentional, with rationale):
-        - Field-level Pydantic constraints (``ge``, ``le``,
+        - Most field-level Pydantic constraints (``ge``, ``le``,
           ``max_length``) on typed envelope fields. The agent code
           is ours; after HMAC, malformed shapes are agent bugs, not
-          attacks. The WS gateway's bytes cap (1 MiB per frame)
-          remains the outer DoS bound.
-        - Strict-mode type coercion. ``model_construct`` accepts
-          whatever JSON shape the wire delivered. Type errors in
-          downstream consumers surface as AttributeError, which is
-          acceptable for trusted post-HMAC paths.
+          attacks. Security-relevant control Literals are pinned by
+          :func:`_validate_authenticated_payload_semantics`. The WS
+          gateway's bytes cap (1 MiB per frame) remains the outer DoS
+          bound.
+        - Strict-mode field validation. ``model_construct`` accepts
+          whatever JSON values the wire delivered, while still constructing
+          the typed nested payload model required by downstream attribute
+          access.
         """
         # ------------------------------------------------------------
         # Light shape sanity (the §7 safety net from the design doc).
@@ -441,6 +469,7 @@ class FrameVerifier:
         envelope["session_id"] = self._session_id
 
         verify_envelope(self._secret, envelope)
+        _validate_authenticated_payload_semantics(frame_type, payload)
         self._guard.check(envelope)
 
         # ------------------------------------------------------------
@@ -465,7 +494,9 @@ class FrameVerifier:
             frame_kwargs["ts"] = _coerce_iso_datetime(frame_kwargs["ts"])
 
         if payload_cls is None:
-            # ``command_ack`` etc. -- payload is plain dict[str, Any].
+            # Reserved for a future signed frame that deliberately declares
+            # an untyped payload. Every current signed frame is registered
+            # with a typed payload class above.
             constructed_payload: Any = payload if payload is not None else {}
         else:
             payload_dict = dict(payload) if payload else {}

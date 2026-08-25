@@ -1,6 +1,6 @@
 [project]
 name = "z4j-core"
-version = "1.8.0"
+version = "1.9.0"
 description = "z4j domain core - models, protocols, transport, redaction, policy (Apache 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,8 +23,9 @@ classifiers = [
 ]
 
 # z4j-core is the PURE DOMAIN core. It imports nothing framework- or
-# engine-specific. The only allowed runtime dependency is Pydantic
-# (for validated data models) plus the Python standard library.
+# engine-specific. Its direct runtime dependencies are Pydantic
+# (for validated data models) and typing-extensions, plus the Python
+# standard library.
 # This is enforced by .importlinter in the repo root.
 dependencies = [
     # ``[email]`` extra pulls in email-validator, required by the
@@ -43,7 +44,7 @@ Issues = "https://github.com/z4jdev/z4j-core/issues"
 Source = "https://github.com/z4jdev/z4j-core"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
