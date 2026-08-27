@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.1 (2026-08-26)
+
+* Carried with the coordinated fleet release. No protocol or policy change.
+
 ## 1.9.0 (2026-08-25)
 
 * Added `AgentIncompatibleError` and widened the audit model so a 1.9 agent and a 1.9 brain agree on what an incompatible peer is.
