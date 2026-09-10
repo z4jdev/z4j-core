@@ -22,12 +22,13 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from z4j_core.errors import ProtocolError, ProtocolVersionError
 from z4j_core.transport.frames import (
     PROTOCOL_VERSION,
     Frame,
+    TelemetryLossPayload,
     _SignedFrameBase,
     parse_frame,
     serialize_frame,
@@ -470,6 +471,14 @@ class FrameVerifier:
 
         verify_envelope(self._secret, envelope)
         _validate_authenticated_payload_semantics(frame_type, payload)
+        loss = None
+        if frame_type in ("heartbeat", "agent_status") and payload:
+            raw_loss = payload.get("telemetry_loss")
+            if raw_loss is not None:
+                try:
+                    loss = TelemetryLossPayload.model_validate(raw_loss)
+                except ValidationError as exc:
+                    raise ProtocolError("invalid telemetry loss counters") from exc
         self._guard.check(envelope)
 
         # ------------------------------------------------------------
@@ -500,6 +509,8 @@ class FrameVerifier:
             constructed_payload: Any = payload if payload is not None else {}
         else:
             payload_dict = dict(payload) if payload else {}
+            if frame_type in ("heartbeat", "agent_status") and "telemetry_loss" in payload_dict:
+                payload_dict["telemetry_loss"] = loss
             # Coerce known datetime fields in the payload before
             # constructing the typed model (so attribute access yields
             # datetime, not str).

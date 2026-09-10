@@ -267,6 +267,31 @@ class HeartbeatFrame(_SignedFrameBase):
     payload: HeartbeatPayload
 
 
+class TelemetryLossPayload(BaseModel):
+    """Cumulative loss, scoped to one buffer and one adapter runtime.
+
+    Reason counters count frames; event_records counts records inside valid
+    batches. They overlap and must not be added together. Adapter counters
+    reset with runtime_id; buffer counters survive reopening the same file.
+    None means the agent does not support this accounting.
+    """
+
+    model_config = ConfigDict(strict=True, extra="ignore")
+
+    buffer_id: str = Field(min_length=1, max_length=64)
+    runtime_id: str = Field(min_length=1, max_length=64)
+    capacity_evicted_frames: int = Field(default=0, ge=0, le=2**53 - 1)
+    content_rejected_frames: int = Field(default=0, ge=0, le=2**53 - 1)
+    event_records: int = Field(default=0, ge=0, le=2**53 - 1)
+    command_results: int = Field(default=0, ge=0, le=2**53 - 1)
+    other_frames: int = Field(default=0, ge=0, le=2**53 - 1)
+    unclassified_frames: int = Field(default=0, ge=0, le=2**53 - 1)
+    adapter_events: dict[
+        Annotated[str, Field(min_length=1, max_length=64)],
+        Annotated[int, Field(ge=0, le=2**53 - 1)],
+    ] = Field(default_factory=dict, max_length=32)
+
+
 class HeartbeatPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
 
@@ -277,6 +302,7 @@ class HeartbeatPayload(BaseModel):
     buffer_size: int = Field(default=0, ge=0, le=10_000_000)
     last_flush_at: datetime | None = None
     dropped_events: int = Field(default=0, ge=0, le=10_000_000)
+    telemetry_loss: TelemetryLossPayload | None = None
     adapter_health: dict[str, str] = Field(default_factory=dict)
 
 
@@ -434,6 +460,8 @@ class AgentStatusFrame(_SignedFrameBase):
 
 class AgentStatusPayload(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
+
+    telemetry_loss: TelemetryLossPayload | None = None
 
     # Per-error-class consecutive failure counts since the last
     # successful handshake. All three reset to 0 on connect; bumped
@@ -650,6 +678,7 @@ __all__ = [
     "HelloPayload",
     "RegistryDeltaFrame",
     "RegistryDeltaPayload",
+    "TelemetryLossPayload",
     "canonical_json",
     "parse_frame",
     "serialize_frame",

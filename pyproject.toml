@@ -1,6 +1,6 @@
 [project]
 name = "z4j-core"
-version = "1.10.0"
+version = "1.11.0"
 description = "z4j domain core - models, protocols, transport, redaction, policy (Apache 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,8 +32,11 @@ dependencies = [
     # ``EmailStr`` field on ``z4j_core.models.user.User``. Without
     # this every consumer of z4j-core that imports the user model
     # crashes at import time.
-    "pydantic[email]>=2.13.3",
-    "typing-extensions>=4.15.0",
+    # Shared validation APIs are exercised at the supported minimum.
+    # Python 3.14 needs Pydantic 2.12 or newer upstream wheels/runtime.
+    "pydantic[email]>=2.9.2; python_version < '3.14'",
+    "pydantic[email]>=2.12; python_version >= '3.14'",
+    "typing-extensions>=4.12.2",
 ]
 
 [project.urls]

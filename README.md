@@ -71,3 +71,12 @@ Apache-2.0, see [LICENSE](LICENSE).
 - Issues: https://github.com/z4jdev/z4j-core/issues
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 - Security: security@z4j.com (see [SECURITY.md](SECURITY.md))
+
+## Dependency compatibility
+
+The shared models support Pydantic 2.9.2+ on Python 3.11–3.13 and Pydantic 2.12+
+on Python 3.14+, with `typing-extensions>=4.12.2`. The latter Python branch needs
+upstream Pydantic runtime/wheel support. Z4J's development lockfile selects the
+current reviewed versions; it does not force host applications onto those exact
+versions. Strict validation, redaction and wire-protocol tests run at the declared
+minimums as well as the current dependency profile.
