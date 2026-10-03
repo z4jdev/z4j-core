@@ -61,6 +61,22 @@ def viewer_user() -> User:
 
 
 @pytest.fixture
+def auditor_user() -> User:
+    return User(
+        id=UUID("00000000-0000-4000-8000-000000000014"),
+        email="auditor@example.com",
+        display_name="Auditor",
+        is_admin=False,
+        is_active=True,
+        force_password_change=False,
+        timezone="UTC",
+        last_login_at=None,
+        created_at=_FIXED_NOW,
+        updated_at=_FIXED_NOW,
+    )
+
+
+@pytest.fixture
 def operator_user() -> User:
     return User(
         id=UUID("00000000-0000-4000-8000-000000000011"),
@@ -115,6 +131,17 @@ def viewer_membership(project: Project, viewer_user: User) -> Membership:
         user_id=viewer_user.id,
         project_id=project.id,
         role=ProjectRole.VIEWER,
+        created_at=_FIXED_NOW,
+    )
+
+
+@pytest.fixture
+def auditor_membership(project: Project, auditor_user: User) -> Membership:
+    return Membership(
+        id=UUID("00000000-0000-4000-8000-000000000023"),
+        user_id=auditor_user.id,
+        project_id=project.id,
+        role=ProjectRole.AUDITOR,
         created_at=_FIXED_NOW,
     )
 

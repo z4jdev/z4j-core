@@ -24,6 +24,8 @@ Two especially security-sensitive shared areas are:
 These areas have dedicated security-focused unit tests and should be reviewed
 together with their consumers in the brain and agents.
 
-`z4j_core.policy` is a helper for direct consumers. The brain's authentication
-and RBAC implementation is owned by the `z4j` package and is not delegated to
-that helper.
+`z4j_core.policy` holds the role vocabulary: the role order and the table that
+maps each action to the tier that owns it. The brain's authentication and RBAC
+implementation is owned by the `z4j` package; its domain-layer engine resolves
+memberships and answers HTTP itself and reads only that table from here, and a
+contract test in the z4j repository holds the two to the same answers.

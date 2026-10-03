@@ -16,7 +16,7 @@ agent package.
 
 Python 3.11+. Pure-Python, no framework or database imports.
 
-Full per-adapter matrix at <https://z4j.dev/reference/compatibility/>.
+Full per-adapter matrix at <https://docs.z4j.com/reference/compatibility/>.
 
 ## What's in here
 
@@ -30,8 +30,9 @@ Full per-adapter matrix at <https://z4j.dev/reference/compatibility/>.
 - **Redaction engine**, scrubs values that match the built-in or
   operator-configured patterns from event payloads (URLs, headers, kwargs,
   exceptions) before they hit the brain
-- **Policy helpers**, role-based action enums and a pure policy engine for
-  direct consumers. The brain enforces its API RBAC in its own domain layer.
+- **Policy helpers**, the project-role order, the role-to-action table and a
+  pure policy engine over them. The brain takes that vocabulary from here, so
+  the table is defined once, and the brain enforces its API RBAC in its own domain layer.
 - **Error hierarchy**, shared exception classes so agents and brain
   agree on what counts as `AuthorizationError` vs `NotFoundError`
   vs `ConflictError`
@@ -51,13 +52,13 @@ against the protocols.
 The wire protocol is `v=2`; its frame models ignore additive fields.
 Product-version skew is narrower than the wire format alone, so upgrade
 the active z4j packages together according to the
-[compatibility policy](https://z4j.dev/reference/versioning/). Adapter
+[compatibility policy](https://docs.z4j.com/reference/versioning/). Adapter
 interfaces are structural Python protocols; adding a method can therefore
 require coordinated adapter updates even when the wire format is unchanged.
 
 ## Documentation
 
-Full docs at [z4j.dev/concepts/architecture/](https://z4j.dev/concepts/architecture/).
+Full docs at [docs.z4j.com/concepts/architecture/](https://docs.z4j.com/concepts/architecture/).
 
 ## License
 
@@ -66,7 +67,7 @@ Apache-2.0, see [LICENSE](LICENSE).
 ## Links
 
 - Homepage: https://z4j.com
-- Documentation: https://z4j.dev
+- Documentation: https://docs.z4j.com
 - PyPI: https://pypi.org/project/z4j-core/
 - Issues: https://github.com/z4jdev/z4j-core/issues
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
@@ -74,7 +75,7 @@ Apache-2.0, see [LICENSE](LICENSE).
 
 ## Dependency compatibility
 
-The shared models support Pydantic 2.9.2+ on Python 3.11–3.13 and Pydantic 2.12+
+The shared models support Pydantic 2.9.2+ on Python 3.11 to 3.13 and Pydantic 2.12+
 on Python 3.14+, with `typing-extensions>=4.12.2`. The latter Python branch needs
 upstream Pydantic runtime/wheel support. Z4J's development lockfile selects the
 current reviewed versions; it does not force host applications onto those exact

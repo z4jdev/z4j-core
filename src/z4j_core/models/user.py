@@ -20,14 +20,26 @@ from z4j_core.models._base import Z4JModel
 class ProjectRole(StrEnum):
     """Role a user holds within a specific project.
 
-    - ``viewer`` - read-only access to all project data.
+    Authority order is ``viewer < auditor < operator < admin``; the
+    role-to-action table lives in :mod:`z4j_core.policy.engine` and is
+    the single vocabulary the brain enforces.
+
+    - ``viewer`` - read ordinary project data.
+    - ``auditor`` - viewer plus the audit trail: list, export and verify
+      it, and read the audit forwarder's status. No command, schedule,
+      membership, agent-token or project authority of any kind, so the
+      people who review the record are not the people who make it.
     - ``operator`` - viewer plus the ability to issue commands and control
       existing schedules (enable, disable, trigger, pause, resume).
-    - ``admin`` - operator plus schedule-definition CRUD and the ability to
-      manage memberships, retention, rate limits, and agent tokens.
+      Operators do not read the audit trail.
+    - ``admin`` - operator plus schedule-definition CRUD, queue purge,
+      task deletion, and the ability to manage memberships, notification
+      channels, automation settings and agent tokens; admins also hold
+      every auditor right.
     """
 
     VIEWER = "viewer"
+    AUDITOR = "auditor"
     OPERATOR = "operator"
     ADMIN = "admin"
 

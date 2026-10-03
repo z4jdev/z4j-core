@@ -20,6 +20,18 @@ from z4j_core.models.command import (
     CommandStatus,
 )
 from z4j_core.models.config import Config, DiscoveryHints, RequestContext
+from z4j_core.models.dead_letter import (
+    DEAD_LETTER_EXCERPT_MAX_CHARS,
+    DLQ_LIST_ACTION,
+    DLQ_LIST_DEFAULT_LIMIT,
+    DLQ_LIST_MAX_LIMIT,
+    LIST_DEAD_LETTERS_CAPABILITY,
+    DeadLetterEntry,
+    DeadLetterPage,
+    decode_offset_cursor,
+    encode_offset_cursor,
+    redact_error_excerpt,
+)
 from z4j_core.models.delta import TaskRegistryDelta
 from z4j_core.models.event import Event, EventKind
 from z4j_core.models.project import Project
@@ -36,6 +48,11 @@ from z4j_core.models.user import Membership, ProjectRole, User
 from z4j_core.models.worker import Worker, WorkerState
 
 __all__ = [
+    "DEAD_LETTER_EXCERPT_MAX_CHARS",
+    "DLQ_LIST_ACTION",
+    "DLQ_LIST_DEFAULT_LIMIT",
+    "DLQ_LIST_MAX_LIMIT",
+    "LIST_DEAD_LETTERS_CAPABILITY",
     "Agent",
     "AgentCapabilities",
     "AgentState",
@@ -45,6 +62,8 @@ __all__ = [
     "CommandResult",
     "CommandStatus",
     "Config",
+    "DeadLetterEntry",
+    "DeadLetterPage",
     "DiscoveryHints",
     "Event",
     "EventKind",
@@ -63,5 +82,8 @@ __all__ = [
     "User",
     "Worker",
     "WorkerState",
+    "decode_offset_cursor",
+    "encode_offset_cursor",
+    "redact_error_excerpt",
     "refuse_unimplemented_overlap",
 ]

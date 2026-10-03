@@ -64,7 +64,7 @@ class EventKind(StrEnum):
     # Event payload shape (in ``data``): ``{scheduler: str,
     # schedules: list[dict], reason: "boot"|"periodic"|"command"}``.
     # Added in 1.3.1 to close the "celery-beat schedules don't
-    # show up until I edit them" gap. See docs/SCHEDULER.md §13.2.
+    # show up until I edit them" gap. See docs/historical/SCHEDULER-DESIGN-DRAFT-2026-04.md §13.2.
     SCHEDULE_SNAPSHOT = "schedule.snapshot"
 
     # Unknown / unrecognized

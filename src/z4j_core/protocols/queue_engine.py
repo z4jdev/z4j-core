@@ -15,6 +15,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from z4j_core.models import (
     CommandResult,
+    DeadLetterPage,
     DiscoveryHints,
     Event,
     Queue,
@@ -241,6 +242,44 @@ class QueueEngineAdapter(Protocol):
         """Move a task from the dead-letter queue back to its original queue."""
         ...
 
+    async def list_dead_letters(
+        self,
+        queue: str | None = None,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> DeadLetterPage:
+        """Return one page of the engine's dead-lettered tasks, newest first.
+
+        This is the read side of :meth:`requeue_dead_letter`: every
+        ``task_id`` in the page is one that method accepts. The agent
+        dispatcher maps the ``dlq.list`` command onto this method and
+        serialises the page into ``command_result.result`` (the full wire
+        contract is documented in :mod:`z4j_core.models.dead_letter`).
+
+        ``queue`` restricts the page to one queue; ``None`` spans every
+        queue the adapter knows. ``limit`` is the page size, already clamped
+        by the dispatcher to :data:`z4j_core.models.DLQ_LIST_MAX_LIMIT`.
+        ``cursor`` is the previous page's ``next_cursor`` or ``None`` for the
+        first page; its format is the adapter's own and the brain treats it
+        as opaque.
+
+        Reads only: an implementation must never consume, ack, or reorder
+        the dead letters it lists, and must never deserialise an untrusted
+        broker payload (pickle) to describe them. ``error_excerpt`` must go
+        through :func:`z4j_core.models.redact_error_excerpt` before it
+        leaves the adapter.
+
+        Adapters advertise ``"list_dead_letters"`` in :meth:`capabilities`
+        when they implement this. An engine with no dead-letter store keeps
+        the capability absent and raises
+        :class:`z4j_core.errors.AdapterError` here; the dispatcher never
+        reaches the method in that case. Broker failures raise a
+        :class:`z4j_core.errors.Z4JError` subclass; a malformed ``cursor``
+        raises :class:`z4j_core.errors.ValidationError`.
+        """
+        ...
+
     async def rate_limit(
         self,
         task_name: str,
@@ -285,6 +324,8 @@ class QueueEngineAdapter(Protocol):
         - ``bulk_retry`` - native bulk implementation
         - ``purge_queue`` - native purge implementation
         - ``requeue_dead_letter`` - native dead-letter requeue implementation
+        - ``list_dead_letters`` - :meth:`list_dead_letters` is implemented;
+          gates the ``dlq.list`` command (RQ and Dramatiq)
         - ``restart_worker`` - :meth:`restart_worker` is implemented
           (only celery has the remote control to do this)
         - ``rate_limit`` - native broker-side rate limit (celery only)

@@ -28,8 +28,11 @@ from z4j_core.redaction.markers import (
 from z4j_core.redaction.patterns import (
     DEFAULT_KEY_PATTERNS,
     DEFAULT_VALUE_PATTERNS,
+    MAX_EXTRA_PATTERN_KEY_LENGTH,
+    MAX_REDACTION_KEY_LENGTH,
     compile_key_patterns,
     compile_value_patterns,
+    probe_key_pattern,
 )
 
 
@@ -73,7 +76,15 @@ class RedactionEngine:
 
     def __init__(self, config: RedactionConfig | None = None) -> None:
         self.config = config or RedactionConfig()
-        self._key_patterns = self._build_key_patterns()
+        # Built-in and operator-supplied key patterns are held apart
+        # because ``key_matches`` bounds them differently: the built-ins
+        # are vetted literals that run on any key up to the global cap,
+        # the extras are probed at construction and run only up to the
+        # extra cap. ``_key_patterns`` is the combined view, defaults
+        # first, for callers that read the full list.
+        self._default_key_patterns = self._build_default_key_patterns()
+        self._extra_key_patterns = self._build_extra_key_patterns()
+        self._key_patterns = self._default_key_patterns + self._extra_key_patterns
         self._value_patterns = self._build_value_patterns()
         # Combined-alternation regex across every value pattern, so
         # scrub does ONE re.search per string instead of N separate
@@ -94,15 +105,40 @@ class RedactionEngine:
     # Pattern compilation - fail-closed on bad input
     # ------------------------------------------------------------------
 
-    def _build_key_patterns(self) -> list[re.Pattern[str]]:
-        defaults = DEFAULT_KEY_PATTERNS if self.config.default_patterns_enabled else ()
+    def _build_default_key_patterns(self) -> list[re.Pattern[str]]:
+        if not self.config.default_patterns_enabled:
+            return []
+        # The built-ins are literal names with at most one optional
+        # separator; they cannot fail to compile and cannot backtrack.
+        return compile_key_patterns(DEFAULT_KEY_PATTERNS)
+
+    def _build_extra_key_patterns(self) -> list[re.Pattern[str]]:
         try:
-            return compile_key_patterns(defaults + tuple(self.config.extra_key_patterns))
+            compiled = compile_key_patterns(tuple(self.config.extra_key_patterns))
         except re.error as exc:
             raise RedactionConfigError(
                 f"invalid key pattern: {exc}",
                 details={"source": "extra_key_patterns", "error": str(exc)},
             ) from exc
+        # A pattern that compiles can still cost exponential time on a
+        # key of a few dozen characters, and these run on every key of
+        # every payload. Measure each one here, on the range of key
+        # lengths it will actually be matched against, and refuse it
+        # like a compile error: startup fails with the reason rather
+        # than a worker or the brain stalling on the first crafted key.
+        for index, pattern in enumerate(compiled):
+            reason = probe_key_pattern(pattern)
+            if reason is not None:
+                raise RedactionConfigError(
+                    f"catastrophic key pattern: {reason}",
+                    details={
+                        "source": "extra_key_patterns",
+                        "index": index,
+                        "pattern": pattern.pattern,
+                        "error": reason,
+                    },
+                )
+        return compiled
 
     def _build_value_patterns(self) -> list[re.Pattern[str]]:
         defaults = DEFAULT_VALUE_PATTERNS if self.config.default_patterns_enabled else ()
@@ -154,8 +190,29 @@ class RedactionEngine:
         Exposed for testing and for use by the per-task ``z4j_meta``
         helper, which composes its own list of "always redact" keys
         on top of the engine's defaults.
+
+        Bounded, because the key comes off the wire and the patterns
+        are a backtracking engine with no step limit:
+
+        * a key longer than :data:`MAX_REDACTION_KEY_LENGTH` is reported
+          as sensitive without running any pattern;
+        * the extra patterns run only on keys up to
+          :data:`MAX_EXTRA_PATTERN_KEY_LENGTH`; when extras are configured
+          a longer key is reported as sensitive without running them.
+
+        Below the extra cap the construction-time probe is the sole bound
+        on an extra pattern's cost: a pattern installed past the probe
+        (by monkeypatching the private list) is not re-measured here.
         """
-        return any(p.fullmatch(key) for p in self._key_patterns)
+        if len(key) > MAX_REDACTION_KEY_LENGTH:
+            return True
+        if any(p.fullmatch(key) for p in self._default_key_patterns):
+            return True
+        if not self._extra_key_patterns:
+            return False
+        if len(key) > MAX_EXTRA_PATTERN_KEY_LENGTH:
+            return True
+        return any(p.fullmatch(key) for p in self._extra_key_patterns)
 
     def value_matches(self, value: str) -> bool:
         """True if ``value`` matches any value pattern.
@@ -273,4 +330,9 @@ class RedactionEngine:
         return value
 
 
-__all__ = ["RedactionConfig", "RedactionEngine"]
+__all__ = [
+    "MAX_EXTRA_PATTERN_KEY_LENGTH",
+    "MAX_REDACTION_KEY_LENGTH",
+    "RedactionConfig",
+    "RedactionEngine",
+]

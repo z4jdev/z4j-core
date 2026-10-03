@@ -1,9 +1,11 @@
 """Single source of truth for the z4j version string.
 
 All packages in the z4j workspace use **SemVer** (``MAJOR.MINOR.PATCH``).
-Each package is versioned independently (see ``docs/VERSIONING.md``),
-but ``z4j-core``'s version is the reference - adapters pin against
-it via ``z4j-core >=1.0,<2.0`` in their ``pyproject.toml``.
+Each package carries its own version (see ``docs/VERSIONING.md``): a minor
+release stamps every package at once, a patch re-cuts only the packages
+whose shipped code changed. ``z4j-core``'s version is the reference, and
+every adapter floors it at the release's minor baseline
+(``z4j-core >=X.Y.0,<2``) in its ``pyproject.toml``.
 
 Pre-release suffixes follow PEP 440:
 - ``1.0.0a1`` - alpha 1

@@ -27,12 +27,20 @@ def test_dev_mode_warning_does_not_claim_hmac_is_disabled() -> None:
     assert "frame HMAC remains required" in resolver
 
 
-def test_brain_policy_engine_does_not_import_library_side_helper() -> None:
+def test_brain_delegates_to_core_policy_only_from_its_policy_engine() -> None:
+    """Core's policy vocabulary is the one authority (decision D-4).
+
+    The brain consults it from exactly one place, ``domain/policy_engine.py``,
+    which adds membership synthesis and anti-enumeration on top. A second
+    import site would be a second place where a role decision could drift.
+    """
     backend_root = _REPO_ROOT / "packages/z4j/backend/src/z4j_brain"
-    backend_sources = "\n".join(
-        path.read_text(encoding="utf-8") for path in sorted(backend_root.rglob("*.py"))
+    importers = sorted(
+        path.relative_to(backend_root).as_posix()
+        for path in backend_root.rglob("*.py")
+        if "z4j_core.policy" in path.read_text(encoding="utf-8")
     )
 
-    assert "from z4j_core.policy" not in backend_sources
-    assert "import z4j_core.policy" not in backend_sources
-    assert (backend_root / "domain/policy_engine.py").is_file()
+    assert importers == ["domain/policy_engine.py"]
+    engine = (backend_root / "domain/policy_engine.py").read_text(encoding="utf-8")
+    assert "from z4j_core.policy import" in engine

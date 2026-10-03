@@ -1,6 +1,6 @@
 [project]
 name = "z4j-core"
-version = "1.11.0"
+version = "1.12.0"
 description = "z4j domain core - models, protocols, transport, redaction, policy (Apache 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,7 +41,7 @@ dependencies = [
 
 [project.urls]
 Changelog = "https://github.com/z4jdev/z4j-core/blob/main/CHANGELOG.md"
-Documentation = "https://z4j.dev"
+Documentation = "https://docs.z4j.com"
 Homepage = "https://z4j.com"
 Issues = "https://github.com/z4jdev/z4j-core/issues"
 Source = "https://github.com/z4jdev/z4j-core"

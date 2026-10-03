@@ -283,8 +283,12 @@ class TestEnums:
 
     def test_project_role_values(self) -> None:
         assert ProjectRole.VIEWER.value == "viewer"
+        assert ProjectRole.AUDITOR.value == "auditor"
         assert ProjectRole.OPERATOR.value == "operator"
         assert ProjectRole.ADMIN.value == "admin"
+        # Declaration order is authority order; the policy engine's
+        # ROLE_ORDER and the dashboard's selectors both rely on it.
+        assert [r.value for r in ProjectRole] == ["viewer", "auditor", "operator", "admin"]
 
     def test_catch_up_policy_values(self) -> None:
         # Wire vocabulary is what brain stores in the catch_up column.
