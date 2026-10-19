@@ -11,6 +11,16 @@ from typing import Any
 EXTERNAL_SCHEDULE_PROTOCOL_VERSION = 1
 EXTERNAL_SCHEDULE_STABLE_SNAPSHOT_CAPABILITY = "external_schedule_stable_snapshot_v1"
 EXTERNAL_SCHEDULE_RUNTIME_FEATURE = "external_schedule_protocol_v1"
+EXTERNAL_SCHEDULE_MUTATION_CAPABILITY = "external_schedule_mutation_v1"
+
+
+def external_schedule_configuration(row: dict[str, Any]) -> dict[str, Any]:
+    """Configuration used by native compare-and-set, excluding live counters."""
+    return {
+        key: value
+        for key, value in row.items()
+        if key not in {"last_run_at", "next_run_at", "total_runs"}
+    }
 
 
 class ExternalScheduleProtocolError(ValueError):
@@ -255,13 +265,21 @@ def external_control_result_matches_desired(
     ``next_run_at`` is a runtime-owned cursor.  Some schedulers necessarily
     clear it while paused and recompute it while resumed, so a successful
     enable/disable cannot promise the value captured before the operation.
-    Every other normalized field remains exact, including source identity,
-    configuration, counters, and the requested ``is_enabled`` state.
+    Disabling django-celery-beat also clears ``last_run_at`` in its native
+    model save. That specific cursor reset is allowed; source identity,
+    configuration, counters, and the requested state still must match.
     """
 
     if desired.keys() != observed.keys():
         return False
-    return all(desired[key] == observed[key] for key in desired if key != "next_run_at")
+    ignored = {"next_run_at"}
+    if (
+        desired.get("source") == "celery-beat:database"
+        and desired.get("is_enabled") is False
+        and observed.get("last_run_at") is None
+    ):
+        ignored.add("last_run_at")
+    return all(desired[key] == observed[key] for key in desired if key not in ignored)
 
 
 def external_snapshot_frame_body(
@@ -359,6 +377,7 @@ def external_snapshot_frame_digest(body: dict[str, Any]) -> str:
 
 
 __all__ = [
+    "EXTERNAL_SCHEDULE_MUTATION_CAPABILITY",
     "EXTERNAL_SCHEDULE_PROTOCOL_VERSION",
     "EXTERNAL_SCHEDULE_RUNTIME_FEATURE",
     "EXTERNAL_SCHEDULE_STABLE_SNAPSHOT_CAPABILITY",
@@ -367,6 +386,7 @@ __all__ = [
     "external_control_result_matches_desired",
     "external_projection_body",
     "external_projection_digest",
+    "external_schedule_configuration",
     "external_schedule_source_scope",
     "external_snapshot_frame_body",
     "external_snapshot_frame_digest",

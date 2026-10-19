@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.0 (2026-10-19)
+
+- Add the durable native override protocol, strict numeric cron validation and shared direct native mutation helpers.
+
 ## 1.12.0 (2026-10-03)
 
 * Add `QueueEngine.list_dead_letters(queue, limit, cursor)`, the read side

@@ -62,7 +62,7 @@ Full docs at [docs.z4j.com/concepts/architecture/](https://docs.z4j.com/concepts
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE).
+Apache-2.0, see [LICENSE](https://github.com/z4jdev/z4j-core/blob/main/LICENSE).
 
 ## Links
 
@@ -70,8 +70,8 @@ Apache-2.0, see [LICENSE](LICENSE).
 - Documentation: https://docs.z4j.com
 - PyPI: https://pypi.org/project/z4j-core/
 - Issues: https://github.com/z4jdev/z4j-core/issues
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- Security: security@z4j.com (see [SECURITY.md](SECURITY.md))
+- Changelog: [CHANGELOG.md](https://github.com/z4jdev/z4j-core/blob/main/CHANGELOG.md)
+- Security: security@z4j.com (see [SECURITY.md](https://github.com/z4jdev/z4j-core/blob/main/SECURITY.md))
 
 ## Dependency compatibility
 
@@ -79,5 +79,7 @@ The shared models support Pydantic 2.9.2+ on Python 3.11 to 3.13 and Pydantic 2.
 on Python 3.14+, with `typing-extensions>=4.12.2`. The latter Python branch needs
 upstream Pydantic runtime/wheel support. Z4J's development lockfile selects the
 current reviewed versions; it does not force host applications onto those exact
-versions. Strict validation, redaction and wire-protocol tests run at the declared
-minimums as well as the current dependency profile.
+versions. The project's CI workflow defines framework-compatibility lanes that
+run the z4j-core unit tests (strict validation, redaction and wire protocol) at
+the declared Pydantic and typing-extensions minimums as well as at the current
+dependency profile.

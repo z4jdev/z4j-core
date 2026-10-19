@@ -15,7 +15,8 @@ schedule-management UI and whichever scheduler the user runs.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Any, Protocol, runtime_checkable
 
 from z4j_core.models import CommandResult, Schedule
 
@@ -128,4 +129,52 @@ class SchedulerAdapter(Protocol):
         ...
 
 
-__all__ = ["SchedulerAdapter"]
+@runtime_checkable
+class ExternalScheduleMutationAdapter(SchedulerAdapter, Protocol):
+    """Optional native writes with a source-transaction compare-and-set.
+
+    Advertise external_schedule_mutation_v1 only when the native store can
+    atomically reject a changed prior definition. A timeout is indeterminate.
+    ``definition`` contains only user-editable common schedule fields. Delete
+    returns None; create/update return the committed native schedule.
+    """
+
+    async def apply_external_mutation(
+        self,
+        *,
+        operation: str,
+        schedule_id: str | None,
+        expected: dict[str, Any] | None,
+        definition: dict[str, Any],
+    ) -> Schedule | None: ...
+
+
+class NativeScheduleOverrides(Protocol):
+    """Durable overrides consumed by the native scheduler's producer.
+
+    One store belongs to one application and scheduler owner. Implementations
+    serialize compare-and-set and retain deletions across process restarts.
+    Native adapters must validate every effective definition before execution.
+    """
+
+    def resolve(self, baseline: list[Schedule], *, owner: str) -> list[Schedule]:
+        """Merge code definitions with committed overrides and tombstones."""
+        ...
+
+    def mutate(
+        self,
+        *,
+        owner: str,
+        operation: str,
+        schedule_id: str | None,
+        expected: dict[str, Any] | None,
+        definition: dict[str, Any],
+        baseline: list[Schedule],
+        validate: Callable[[Schedule], None],
+        engine: str,
+    ) -> Schedule | None:
+        """Validate and atomically commit a change against the effective state."""
+        ...
+
+
+__all__ = ["ExternalScheduleMutationAdapter", "NativeScheduleOverrides", "SchedulerAdapter"]

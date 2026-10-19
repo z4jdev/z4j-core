@@ -26,9 +26,10 @@ from __future__ import annotations
 
 from z4j_core.protocols.framework import FrameworkAdapter
 from z4j_core.protocols.queue_engine import QueueEngineAdapter
-from z4j_core.protocols.scheduler import SchedulerAdapter
+from z4j_core.protocols.scheduler import ExternalScheduleMutationAdapter, SchedulerAdapter
 
 __all__ = [
+    "ExternalScheduleMutationAdapter",
     "FrameworkAdapter",
     "QueueEngineAdapter",
     "SchedulerAdapter",
